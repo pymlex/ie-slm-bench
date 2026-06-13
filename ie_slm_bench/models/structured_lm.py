@@ -6,17 +6,10 @@ from pathlib import Path
 
 import pandas as pd
 import torch
-from pydantic import BaseModel
 from tqdm.auto import tqdm
-from transformers import (
-    AutoModelForCausalLM,
-    AutoModelForImageTextToText,
-    AutoProcessor,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from ie_slm_bench.config import LOAD_IN_4BIT, SAVE_EVERY_N
+from ie_slm_bench.config import LOAD_IN_4BIT, MAX_INPUT_TOKENS, SAVE_EVERY_N
 from ie_slm_bench.prompts import SYSTEM_PROMPT, benchmark_schema, build_user_prompt
 
 
@@ -24,7 +17,7 @@ class StructuredLmBackend:
     def __init__(
         self,
         model_id: str,
-        batch_size: int = 4,
+        batch_size: int = 8,
         backend_kind: str = "causal",
     ):
         self.model_id = model_id
@@ -32,7 +25,6 @@ class StructuredLmBackend:
         self.backend_kind = backend_kind
         self.model = None
         self.tokenizer = None
-        self.processor = None
 
     def _quantization_config(self) -> BitsAndBytesConfig | None:
         if not LOAD_IN_4BIT:
@@ -54,18 +46,10 @@ class StructuredLmBackend:
         else:
             model_kwargs["dtype"] = torch.bfloat16
 
-        if self.backend_kind == "gemma":
-            self.processor = AutoProcessor.from_pretrained(self.model_id)
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_id,
-                **model_kwargs,
-            )
-            self.tokenizer = self.processor.tokenizer
-            return
-
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_id,
             trust_remote_code=True,
@@ -75,10 +59,8 @@ class StructuredLmBackend:
     def unload(self) -> None:
         del self.model
         del self.tokenizer
-        del self.processor
         self.model = None
         self.tokenizer = None
-        self.processor = None
         torch.cuda.empty_cache()
 
     def _format_prompt(self, text: str, benchmark: str) -> str:
@@ -103,27 +85,19 @@ class StructuredLmBackend:
             "tokenize": False,
             "add_generation_prompt": True,
         }
-        if self.backend_kind == "causal" and "qwen3" in self.model_id.lower():
+        if self.backend_kind in {"causal", "lfm"} and "qwen3" in self.model_id.lower():
             template_kwargs["enable_thinking"] = False
-
-        if self.backend_kind == "gemma" and self.processor is not None:
-            return self.processor.apply_chat_template(messages, **template_kwargs)
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 
-    def _generate_one(self, prompt: str, max_new_tokens: int) -> str:
-        if self.backend_kind == "gemma" and self.processor is not None:
-            inputs = self.processor(text=prompt, return_tensors="pt").to(self.model.device)
-            input_len = inputs["input_ids"].shape[-1]
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-                use_cache=True,
-            )
-            return self.processor.decode(outputs[0][input_len:], skip_special_tokens=True)
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        input_len = inputs["input_ids"].shape[-1]
+    def _generate_batch(self, prompts: list[str], max_new_tokens: int) -> list[str]:
+        inputs = self.tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=MAX_INPUT_TOKENS,
+        ).to(self.model.device)
+        input_lengths = inputs["attention_mask"].sum(dim=1).tolist()
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
@@ -131,7 +105,15 @@ class StructuredLmBackend:
             pad_token_id=self.tokenizer.pad_token_id,
             use_cache=True,
         )
-        return self.tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True)
+        decoded = []
+        for index, input_length in enumerate(input_lengths):
+            decoded.append(
+                self.tokenizer.decode(
+                    outputs[index][int(input_length):],
+                    skip_special_tokens=True,
+                )
+            )
+        return decoded
 
     def predict_frame(
         self,
@@ -149,25 +131,36 @@ class StructuredLmBackend:
 
         pending = frame[~frame["doc_id"].isin(done_ids)].reset_index(drop=True)
         if done_ids:
-            print(f"Resuming {self.model_id}:{benchmark}, skipped {len(done_ids)} completed docs")
-
-        for offset in tqdm(range(len(pending)), desc=f"{self.model_id}:{benchmark}"):
-            row = pending.iloc[offset]
-            started = time.time()
-            prompt = self._format_prompt(row["text"], benchmark)
-            pred_raw = self._generate_one(prompt, max_new_tokens=max_new_tokens)
-            records.append(
-                {
-                    "benchmark": benchmark,
-                    "model_id": self.model_id,
-                    "doc_id": int(row["doc_id"]),
-                    "text": row["text"],
-                    "gold_json": row["gold_json"],
-                    "pred_raw": pred_raw,
-                    "latency_sec": time.time() - started,
-                }
+            print(
+                f"Resuming {self.model_id}:{benchmark}, "
+                f"skipped {len(done_ids)} completed docs, batch_size={self.batch_size}"
             )
-            if pred_path is not None and (offset + 1) % SAVE_EVERY_N == 0:
+        else:
+            print(f"{self.model_id}:{benchmark}, batch_size={self.batch_size}")
+
+        batch_starts = range(0, len(pending), self.batch_size)
+        for batch_index, batch_start in enumerate(
+            tqdm(batch_starts, desc=f"{self.model_id}:{benchmark}")
+        ):
+            batch_rows = pending.iloc[batch_start : batch_start + self.batch_size]
+            started = time.time()
+            prompts = [self._format_prompt(row["text"], benchmark) for _, row in batch_rows.iterrows()]
+            pred_raw_list = self._generate_batch(prompts, max_new_tokens=max_new_tokens)
+            latency = time.time() - started
+            per_item_latency = latency / len(batch_rows)
+            for row_index, (_, row) in enumerate(batch_rows.iterrows()):
+                records.append(
+                    {
+                        "benchmark": benchmark,
+                        "model_id": self.model_id,
+                        "doc_id": int(row["doc_id"]),
+                        "text": row["text"],
+                        "gold_json": row["gold_json"],
+                        "pred_raw": pred_raw_list[row_index],
+                        "latency_sec": per_item_latency,
+                    }
+                )
+            if pred_path is not None and (batch_index + 1) % SAVE_EVERY_N == 0:
                 pd.DataFrame(records).to_csv(pred_path, index=False)
 
         result = pd.DataFrame(records)

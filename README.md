@@ -4,20 +4,20 @@ End-to-end benchmark for structured information extraction from arbitrary Russia
 
 ## Models
 
-| Display name | Hugging Face registry id | Effective params | Structured output |
-|---|---|---|---|
-| `google/gemma-4-e2b` | `google/gemma-4-E2B-it` | 2.3B E2B | native JSON schema mode |
-| `Qwen/Qwen3-1.7B` | `Qwen/Qwen3-1.7B` | 1.7B | `pydantic.BaseModel` via chat template |
-| `olava-extract` | `IE_SLM_OLAVA_ID` default `numind/NuExtract-2.0-2B` | 2B MoE IE | template-driven JSON extraction |
-| `tiny-pal` | `IE_SLM_TINY_PAL_ID` default `LiquidAI/LFM2-1.2B-Extract` | 1.2B Extract | template-driven JSON extraction |
+| Display name | Hugging Face registry id | Effective params | Batch size default | Structured output |
+|---|---|---|---|---|
+| `Qwen/Qwen3-1.7B` | `Qwen/Qwen3-1.7B` | 1.7B | 16 | `pydantic.BaseModel` via chat template |
+| `olava-extract` | `IE_SLM_OLAVA_ID` default `numind/NuExtract-2.0-2B` | 2B MoE IE | 12 | template-driven JSON extraction |
+| `tiny-pal` | `IE_SLM_TINY_PAL_ID` default `LiquidAI/LFM2-1.2B-Extract` | 1.2B Extract | 24 | template-driven JSON extraction |
 
-Shared inference settings: `max_new_tokens=1024`, greedy decoding `do_sample=False`, 4-bit loading on GPU by default, resume from partial `pred_*.csv`.
+Shared inference settings: batched generation with left padding, `max_new_tokens=512`, bf16 on GPU by default, resume from partial `pred_*.csv`.
 
 Override registry ids in `.env` before launch:
 
 ```bash
 IE_SLM_OLAVA_ID=olava/olava-extract-2b-moe
 IE_SLM_TINY_PAL_ID=tiny-pal/tiny-pal-2.8b-extract
+IE_SLM_BATCH_SIZE_QWEN3=16
 ```
 
 ## Architecture
@@ -210,7 +210,7 @@ bash scripts/install_colab.sh
 
 ### 2. Secrets
 
-Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GEMMA_ID`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_MAX_INPUT_CHARS`, `IE_SLM_LOAD_IN_4BIT`, `IE_SLM_SAVE_EVERY_N`.
+Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_MAX_INPUT_CHARS`, `IE_SLM_MAX_INPUT_TOKENS`, `IE_SLM_LOAD_IN_4BIT`, `IE_SLM_SAVE_EVERY_N`, `IE_SLM_BATCH_SIZE_QWEN3`, `IE_SLM_BATCH_SIZE_OLAVA`, `IE_SLM_BATCH_SIZE_TINY_PAL`.
 
 ```bash
 cp .env.example .env
@@ -226,7 +226,7 @@ python scripts/setup_gh_auth.py
 
 ### 4. Run full benchmark
 
-All four models on both benchmarks:
+All three models on both benchmarks:
 
 ```bash
 python main.py --all-models --run-dir results/run
