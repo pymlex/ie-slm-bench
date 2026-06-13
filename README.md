@@ -1,6 +1,6 @@
 # IE SLM benchmark
 
-End-to-end benchmark for structured information extraction from arbitrary Russian user text with small language models up to 2B parameters. Two Russian benchmarks are evaluated separately: [iluvvatar/NEREL](https://huggingface.co/datasets/iluvvatar/NEREL) and [iluvvatar/RuNNE](https://huggingface.co/datasets/iluvvatar/RuNNE). Each model receives raw text and must return a Pydantic-validated JSON object. Missing fields must remain empty. Per-benchmark CSV artefacts and PNG plots are stored under `results/`.
+End-to-end benchmark for structured information extraction from arbitrary Russian user text with small language models up to 2B parameters. The evaluation corpus is [iluvvatar/RuNNE](https://huggingface.co/datasets/iluvvatar/RuNNE). Each model receives raw text and must return a Pydantic-validated JSON object. Missing fields must remain empty. CSV artefacts and PNG plots are stored under `results/`.
 
 ## Models
 
@@ -11,6 +11,8 @@ End-to-end benchmark for structured information extraction from arbitrary Russia
 | `tiny-pal` | `IE_SLM_TINY_PAL_ID` default `LiquidAI/LFM2-1.2B-Extract` | 1.2B Extract | 24 | template-driven JSON extraction |
 
 Shared inference settings: batched generation with left padding, `max_new_tokens=512`, bf16 on GPU by default, resume from partial `pred_*.csv`.
+
+Doubling batch size above the default often increases VRAM without proportional speedup on L4 because generation becomes latency-bound. Keep `IE_SLM_BATCH_SIZE_QWEN3=16` unless profiling shows a gain.
 
 Override registry ids in `.env` before launch:
 
@@ -33,7 +35,6 @@ classDiagram
     class ModelRegistry
     class StructuredLmBackend
     class Plots
-    class NerelSchema
     class RunneSchema
     Main --> Evaluate
     Main --> Plots
@@ -42,9 +43,7 @@ classDiagram
     ModelRegistry --> StructuredLmBackend
     Evaluate --> Metrics
     Plots --> Metrics
-    DataLoader --> NerelSchema
     DataLoader --> RunneSchema
-    Metrics --> NerelSchema
     Metrics --> RunneSchema
 ```
 
@@ -64,7 +63,6 @@ ie-slm-bench/
 │       ├── registry.py
 │       └── structured_lm.py
 ├── schemas/
-│   ├── nerel.py
 │   └── runne.py
 ├── scripts/
 │   ├── install_colab.sh
@@ -75,41 +73,17 @@ ie-slm-bench/
 ├── main.py
 ├── results/
 │   ├── run/
-│   │   ├── nerel/
-│   │   └── runne/
 │   └── assets/
 └── requirements.txt
 ```
 
-## Benchmarks
-
-### NEREL
-
-Source: [iluvvatar/NEREL](https://huggingface.co/datasets/iluvvatar/NEREL). Annotated Russian news documents with nested named entities, relations, and Wikidata links. Evaluation uses all annotated splits `train`, `test`, and `dev`: 933 documents in total. Original field names and label strings are preserved.
-
-Pydantic schema: `schemas/nerel.py` with `entities`, `relations`, `links`. Entity types include `PERSON`, `ORGANIZATION`, `DATE`, `NATIONALITY`, and 25 further NEREL labels. Relation types include `WORKPLACE`, `HEADQUARTERED_IN`, `LOCATED_IN`, and 46 further NEREL labels.
-
-Input example:
-
-> Словацкий тренер Жолт Хорняк возглавил "Бананц" (Ереван)
-
-Gold annotation example:
-
-> `T1	NATIONALITY 0 9	Словацкий`
->
-> `R1	WORKPLACE Arg1:T2 Arg2:T3`
->
-> `N1	Reference T5 Wikidata:Q171336	`
-
-Expected model output shape:
-
-> `{"entities": [{"id": "T1", "type": "NATIONALITY", "start": 0, "end": 9, "text": "Словацкий"}], "relations": [{"id": "R1", "type": "WORKPLACE", "arg1": "T2", "arg2": "T3"}], "links": [{"id": "N1", "entity_id": "T5", "reference": "Wikidata:Q171336", "kb_name": null}]}`
+## Benchmark
 
 ### RuNNE
 
-Source: [iluvvatar/RuNNE](https://huggingface.co/datasets/iluvvatar/RuNNE). Nested named entity recognition corpus derived from NEREL, used in the RuNNE-2022 shared task. Evaluation uses annotated splits `train` and `test`: 554 documents in total. The `dev` split is excluded because it has no entity annotations.
+Source: [iluvvatar/RuNNE](https://huggingface.co/datasets/iluvvatar/RuNNE). Nested named entity recognition corpus for Russian news-style text, used in the RuNNE-2022 shared task. Evaluation uses annotated splits `train` and `test`: 554 documents in total. The `dev` split is excluded because it has no entity annotations. Original entity type labels are preserved.
 
-Pydantic schema: `schemas/runne.py` with `entities` only. Entity types are the original 29 RuNNE labels such as `PERSON`, `WORK_OF_ART`, `DATE`.
+Pydantic schema: `schemas/runne.py` with field `entities`. Entity types are the original 29 RuNNE labels such as `PERSON`, `WORK_OF_ART`, `DATE`.
 
 Input example:
 
@@ -125,8 +99,6 @@ Expected model output shape:
 
 ## Sampling policy
 
-For each benchmark independently:
-
 - if $N \leq 5000$, use the full annotated dataset
 - if $N > 5000$, subsample exactly $5000$ documents with fixed seed $s=42$
 
@@ -134,11 +106,11 @@ $$
 \mathcal{I} = \mathrm{sort}\big(\mathrm{choice}(\{1,\ldots,N\},\,5000,\,\mathrm{seed}{=}42)\big)
 $$
 
-Current sizes: NEREL $N=933$, RuNNE $N=554$. Both benchmarks use all available annotated documents.
+Current size: RuNNE $N=554$. The full annotated dataset is used.
 
 ## Metrics
 
-Let $y$ be the gold structure and $\hat{y}$ the model prediction after normalisation. Let $\mathcal{E}(\cdot)$ be the multiset of entity objects with exact span and label. Null values are $\varnothing$ for empty strings, `Wikidata:NULL`, and absent optional fields.
+Let $y$ be the gold structure and $\hat{y}$ the model prediction after normalisation. Let $\mathcal{E}(\cdot)$ be the multiset of entity objects with exact span and label $(start, end, type)$. Nested entities are separate objects.
 
 ### 1. Strict Exact Match
 
@@ -150,7 +122,7 @@ $$
 
 ### 2. Field Precision, Recall, F1
 
-Computed separately inside each benchmark for every original label value $l$ such as `entity:PERSON` or `relation:WORKPLACE`.
+Computed for every original label value $l$ such as `entity:PERSON`.
 
 $$
 P_l = \frac{|\mathcal{V}^{gold}_l \cap \mathcal{V}^{pred}_l|}{|\mathcal{V}^{pred}_l|}, \quad
@@ -162,7 +134,7 @@ Reported field scores are macro-averaged over labels present in either gold or p
 
 ### 3. Null-field accuracy
 
-For every nullable field $f$ where gold is empty:
+For documents where gold contains no entities, the model must also return an empty `entities` list.
 
 $$
 \mathrm{NFA} = \frac{1}{|\mathcal{F}_{null}|}\sum_{f\in\mathcal{F}_{null}} \mathbf{1}\big[\hat{y}_f = \varnothing\big]
@@ -170,7 +142,7 @@ $$
 
 ### 4. Hallucination rate
 
-Fraction of nullable gold fields where the model invents a non-empty value:
+Fraction of entity-empty gold documents where the model returns at least one entity.
 
 $$
 \mathrm{HR} = \frac{1}{|\mathcal{F}_{null}|}\sum_{f\in\mathcal{F}_{null}} \mathbf{1}\big[y_f = \varnothing \land \hat{y}_f \neq \varnothing\big]
@@ -186,7 +158,7 @@ $$
 
 ### 6. Entity-level F1
 
-Each nested entity is a separate object matched by exact $(start, end, type)$ for RuNNE and by $(id, type, start, end, text)$ for NEREL entities.
+Each entity is matched by exact $(start, end, type)$.
 
 $$
 P_{ent} = \frac{|\mathcal{E}(y)\cap\mathcal{E}(\hat{y})|}{|\mathcal{E}(\hat{y})|}, \quad
@@ -226,28 +198,16 @@ python scripts/setup_gh_auth.py
 
 ### 4. Run full benchmark
 
-All three models on both benchmarks:
+All three models:
 
 ```bash
 python main.py --all-models --run-dir results/run
 ```
 
-Single model subset:
+Single model:
 
 ```bash
-python main.py --models Qwen/Qwen3-1.7B --benchmarks nerel runne --run-dir results/run
-```
-
-NEREL only:
-
-```bash
-python main.py --all-models --benchmarks nerel --run-dir results/run
-```
-
-RuNNE only:
-
-```bash
-python main.py --all-models --benchmarks runne --run-dir results/run
+python main.py --models Qwen/Qwen3-1.7B --run-dir results/run
 ```
 
 Rebuild plots from existing CSV without inference:
@@ -264,7 +224,7 @@ python scripts/push_results_github.py --message "Colab: IE SLM benchmark results
 
 `GITHUB_NAME` and `GITHUB_EMAIL` from `.env` are applied to the local git config before commit.
 
-Interrupted runs resume automatically from `results/run/<benchmark>/pred_<model>.csv`.
+Interrupted runs resume automatically from `results/run/pred_<model>.csv`.
 
 ### Full pipeline
 
@@ -274,34 +234,23 @@ bash scripts/run_all.sh
 
 Tracked artefacts:
 
-- `results/run/nerel/gold.csv`
-- `results/run/nerel/pred_<model>.csv`
-- `results/run/nerel/metrics_example_<model>.csv`
-- `results/run/nerel/metrics_label_<model>.csv`
-- `results/run/nerel/metrics_summary_<model>.csv`
-- the same five file families under `results/run/runne/`
+- `results/run/gold.csv`
+- `results/run/pred_<model>.csv`
+- `results/run/metrics_example_<model>.csv`
+- `results/run/metrics_label_<model>.csv`
+- `results/run/metrics_summary_<model>.csv`
 - `results/assets/summary.csv`
-- `results/assets/nerel_metrics.png`
 - `results/assets/runne_metrics.png`
-- `results/assets/nerel_field_f1_by_label.png`
 - `results/assets/runne_field_f1_by_label.png`
 - `results/metrics.json`
 
 ## Plot layout
 
-Each benchmark has its own PNG file. Within one subplot at most four metric groups appear as clustered bars. One bar is one model. One group is one metric. NEREL and RuNNE are never mixed on the same axes.
+Within one subplot at most four metric groups appear as clustered bars. One bar is one model. One group is one metric.
 
 ## Benchmark results
 
 Results appear after the Colab run and `scripts/push_results_github.py`. Summary table path: `results/assets/summary.csv`.
-
-### NEREL
-
-<p align="center">
-  <img src="results/assets/nerel_metrics.png" alt="NEREL metrics" width="720" />
-</p>
-
-### RuNNE
 
 <p align="center">
   <img src="results/assets/runne_metrics.png" alt="RuNNE metrics" width="720" />
@@ -326,12 +275,6 @@ GPL-3.0. See [LICENSE](LICENSE).
 The project is under GPL-3.0 license.
 
 ```bibtex
-@article{loukachevitch2021nerel,
-  title={NEREL: A Russian Dataset with Nested Named Entities, Relations and Events},
-  author={Loukachevitch, Natalia and Artemova, Ekaterina and Batura, Tatiana and Braslavski, Pavel and Denisov, Ilia and Ivanov, Vladimir and Manandhar, Suresh and Pugachev, Alexander and Tutubalina, Elena},
-  journal={arXiv preprint arXiv:2108.13112},
-  year={2021}
-}
 @article{Artemova2022runne,
   title={{RuNNE-2022 Shared Task: Recognizing Nested Named Entities}},
   author={Artemova, Ekaterina and Zmeev, Maksim and Loukachevitch, Natalia and Rozhkov, Igor and Batura, Tatiana and Braslavski, Pavel and Ivanov, Vladimir and Tutubalina, Elena},

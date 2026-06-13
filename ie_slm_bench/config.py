@@ -9,6 +9,7 @@ from ie_slm_bench.env import load_env
 load_env()
 
 
+BENCHMARK = "runne"
 SEED = int(os.environ.get("IE_SLM_SEED", "42"))
 MAX_SAMPLES = int(os.environ.get("IE_SLM_MAX_SAMPLES", "5000"))
 MAX_NEW_TOKENS = int(os.environ.get("IE_SLM_MAX_NEW_TOKENS", "512"))
@@ -18,7 +19,6 @@ LOAD_IN_4BIT = os.environ.get("IE_SLM_LOAD_IN_4BIT", "0") == "1"
 SAVE_EVERY_N = int(os.environ.get("IE_SLM_SAVE_EVERY_N", "1"))
 RUN_DIR = Path(os.environ.get("IE_SLM_RUN_DIR", "results/run"))
 
-NEREL_DATASET = os.environ.get("IE_SLM_NEREL_DATASET", "iluvvatar/NEREL")
 RUNNE_DATASET = os.environ.get("IE_SLM_RUNNE_DATASET", "iluvvatar/RuNNE")
 
 QWEN3_17B = os.environ.get("IE_SLM_QWEN3_ID", "Qwen/Qwen3-1.7B")

@@ -9,8 +9,8 @@ import torch
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from ie_slm_bench.config import LOAD_IN_4BIT, MAX_INPUT_TOKENS, SAVE_EVERY_N
-from ie_slm_bench.prompts import SYSTEM_PROMPT, benchmark_schema, build_user_prompt
+from ie_slm_bench.config import BENCHMARK, LOAD_IN_4BIT, MAX_INPUT_CHARS, MAX_INPUT_TOKENS, SAVE_EVERY_N
+from ie_slm_bench.prompts import SYSTEM_PROMPT, build_user_prompt, output_schema
 
 
 class StructuredLmBackend:
@@ -63,9 +63,9 @@ class StructuredLmBackend:
         self.tokenizer = None
         torch.cuda.empty_cache()
 
-    def _format_prompt(self, text: str, benchmark: str) -> str:
+    def _format_prompt(self, text: str) -> str:
         if self.backend_kind == "nuextract":
-            model_cls = benchmark_schema(benchmark)
+            model_cls = output_schema()
             template = {
                 "text": text,
                 "schema": json.loads(model_cls.model_json_schema()),
@@ -76,7 +76,7 @@ class StructuredLmBackend:
                 "# Output:"
             )
 
-        user_prompt = build_user_prompt(text, benchmark)
+        user_prompt = build_user_prompt(text, MAX_INPUT_CHARS)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -118,7 +118,6 @@ class StructuredLmBackend:
     def predict_frame(
         self,
         frame: pd.DataFrame,
-        benchmark: str,
         max_new_tokens: int,
         pred_path: Path | None = None,
     ) -> pd.DataFrame:
@@ -132,26 +131,26 @@ class StructuredLmBackend:
         pending = frame[~frame["doc_id"].isin(done_ids)].reset_index(drop=True)
         if done_ids:
             print(
-                f"Resuming {self.model_id}:{benchmark}, "
+                f"Resuming {self.model_id}:{BENCHMARK}, "
                 f"skipped {len(done_ids)} completed docs, batch_size={self.batch_size}"
             )
         else:
-            print(f"{self.model_id}:{benchmark}, batch_size={self.batch_size}")
+            print(f"{self.model_id}:{BENCHMARK}, batch_size={self.batch_size}")
 
         batch_starts = range(0, len(pending), self.batch_size)
         for batch_index, batch_start in enumerate(
-            tqdm(batch_starts, desc=f"{self.model_id}:{benchmark}")
+            tqdm(batch_starts, desc=f"{self.model_id}:{BENCHMARK}")
         ):
             batch_rows = pending.iloc[batch_start : batch_start + self.batch_size]
             started = time.time()
-            prompts = [self._format_prompt(row["text"], benchmark) for _, row in batch_rows.iterrows()]
+            prompts = [self._format_prompt(row["text"]) for _, row in batch_rows.iterrows()]
             pred_raw_list = self._generate_batch(prompts, max_new_tokens=max_new_tokens)
             latency = time.time() - started
             per_item_latency = latency / len(batch_rows)
             for row_index, (_, row) in enumerate(batch_rows.iterrows()):
                 records.append(
                     {
-                        "benchmark": benchmark,
+                        "benchmark": BENCHMARK,
                         "model_id": self.model_id,
                         "doc_id": int(row["doc_id"]),
                         "text": row["text"],

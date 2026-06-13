@@ -26,13 +26,6 @@ def parse_args():
         help="HuggingFace model ids",
     )
     parser.add_argument(
-        "--benchmarks",
-        nargs="+",
-        default=["nerel", "runne"],
-        choices=["nerel", "runne"],
-        help="Benchmarks to evaluate separately",
-    )
-    parser.add_argument(
         "--run-dir",
         type=str,
         default=str(RUN_DIR),
@@ -72,7 +65,6 @@ def main():
         model_ids = ALL_MODEL_IDS if args.all_models else args.models
         summary = run_models(
             model_ids=model_ids,
-            benchmarks=args.benchmarks,
             run_dir=run_dir,
             max_new_tokens=args.max_new_tokens,
         )

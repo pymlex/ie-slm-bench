@@ -8,14 +8,14 @@ import pandas as pd
 from huggingface_hub import hf_hub_download
 from tqdm.auto import tqdm
 
-from ie_slm_bench.config import MAX_SAMPLES, NEREL_DATASET, RUNNE_DATASET, SEED
-from ie_slm_bench.parsers import parse_nerel_gold, parse_runne_gold
+from ie_slm_bench.config import BENCHMARK, MAX_SAMPLES, RUNNE_DATASET, SEED
+from ie_slm_bench.parsers import parse_runne_gold
 
 
-def _download_jsonl(dataset_id: str, split: str) -> Path:
+def _download_jsonl(split: str) -> Path:
     return Path(
         hf_hub_download(
-            dataset_id,
+            RUNNE_DATASET,
             f"data/{split}.jsonl",
             repo_type="dataset",
         )
@@ -30,19 +30,10 @@ def _load_jsonl_rows(path: Path) -> list[dict]:
     return rows
 
 
-def _load_nerel_rows() -> list[dict]:
-    rows = []
-    for split in ("train", "test", "dev"):
-        rows.extend(_load_jsonl_rows(_download_jsonl(NEREL_DATASET, split)))
-    return rows
-
-
 def _load_runne_rows() -> list[dict]:
     rows = []
     for split in ("train", "test"):
-        path = _download_jsonl(RUNNE_DATASET, split)
-        split_rows = _load_jsonl_rows(path)
-        rows.extend(split_rows)
+        rows.extend(_load_jsonl_rows(_download_jsonl(split)))
     return rows
 
 
@@ -55,41 +46,17 @@ def subsample_rows(rows: list[dict], seed: int = SEED, max_samples: int = MAX_SA
     return [rows[index] for index in indices]
 
 
-def build_nerel_frame() -> pd.DataFrame:
-    rows = subsample_rows(_load_nerel_rows())
-    records = []
-    for row in tqdm(rows, desc="NEREL gold parsing"):
-        gold = parse_nerel_gold(row)
-        records.append(
-            {
-                "benchmark": "nerel",
-                "doc_id": row["id"],
-                "text": row["text"],
-                "gold_json": gold.model_dump_json(),
-            }
-        )
-    return pd.DataFrame(records)
-
-
-def build_runne_frame() -> pd.DataFrame:
+def load_gold_frame() -> pd.DataFrame:
     rows = subsample_rows(_load_runne_rows())
     records = []
     for row in tqdm(rows, desc="RuNNE gold parsing"):
         gold = parse_runne_gold(row)
         records.append(
             {
-                "benchmark": "runne",
+                "benchmark": BENCHMARK,
                 "doc_id": row["id"],
                 "text": row["text"],
                 "gold_json": gold.model_dump_json(),
             }
         )
     return pd.DataFrame(records)
-
-
-def load_benchmark_frame(benchmark: str) -> pd.DataFrame:
-    if benchmark == "nerel":
-        return build_nerel_frame()
-    if benchmark == "runne":
-        return build_runne_frame()
-    raise ValueError(f"Unknown benchmark: {benchmark}")
