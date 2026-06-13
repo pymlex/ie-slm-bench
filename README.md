@@ -54,6 +54,8 @@ ie-slm-bench/
 │   ├── metrics.py
 │   ├── evaluate.py
 │   ├── plots.py
+│   ├── normalize.py
+│   ├── benchmark_summary.py
 │   └── models/
 │       ├── registry.py
 │       └── structured_lm.py
@@ -70,6 +72,7 @@ ie-slm-bench/
 │   ├── run_all.sh
 │   ├── push_dataset_hf.py
 │   ├── push_lm_eval_hf.py
+│   ├── analyze_results.py
 │   ├── setup_gh_auth.py
 │   └── push_results_github.py
 ├── .env.example
@@ -261,20 +264,65 @@ Tracked artefacts:
 - `results/run/metrics_summary_<model>.csv`
 - `results/assets/summary.csv`
 - `results/assets/ru_bank_ie_metrics.png`
+- `results/assets/ru_bank_ie_field_group_f1.png`
 - `results/assets/ru_bank_ie_field_f1_by_label.png`
+- `results/analysis.json`
 - `results/metrics.json`
+
+## Benchmark results
+
+Hardware: NVIDIA RTX 5090, Ubuntu Jupyter, bf16 inference, $N=368$ coverage-valid pairs.
+Metrics apply field normalisation before comparison: digit-only phones and INN, passport and department code formatting, date normalisation, case folding for text fields.
+
+| Model | SEM | Field F1 | Entity F1 | Null-field acc | Hallucination | Schema valid |
+|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-1.7B | 0.0 | 10.1 | 17.4 | 59.1 | 6.3 | 70.1 |
+| NuExtract-2.0-2B | 0.8 | 39.2 | 56.1 | 81.2 | 5.9 | 100.0 |
+| LFM2-1.2B-Extract | 0.0 | 5.7 | 11.9 | 56.4 | 7.4 | 100.0 |
+
+### Findings
+
+NuExtract-2.0-2B is the strongest model on this split. Entity F1 reaches 56.1% and macro field F1 39.2%. Three documents satisfy strict exact match. Schema validity is 100%. The model performs best on IDs, contact, work and passport groups. Macro field F1 for IDs and contact is 71.7%, for work 63.8%, for passport 54.5%. Address index, country and region sub-fields remain at 0% F1 when the client message omits them.
+
+Qwen3-1.7B without an extraction-specific head reaches 17.4% entity F1 and 10.1% macro field F1. Schema validity is 70.1% because Outlines JSON parsing fails on part of the batch. Identity fields and INN extract better than passport blocks. Null-field accuracy is 59.1%, which shows difficulty on sparse gold with 20–80% filled fields per document.
+
+LFM2-1.2B-Extract stays below 12% entity F1. Passport and address groups are near zero. Schema validity is 100% under Outlines, but value accuracy remains low.
+
+### Field groups
+
+Macro field F1 by semantic group:
+
+| Group | Qwen3-1.7B | NuExtract-2.0-2B | LFM2-1.2B-Extract |
+|---|---:|---:|---:|
+| Identity | 12.0 | 31.2 | 9.1 |
+| Passport | 0.0 | 54.5 | 0.3 |
+| IDs & contact | 15.1 | 71.7 | 13.2 |
+| Work | 6.5 | 63.8 | 4.3 |
+| Assets & family | 8.1 | 33.1 | 5.0 |
+
+### Artefacts
+
+- `results/assets/summary.csv` — aggregated metrics table
+- `results/metrics.json` — same summary in JSON
+- `results/analysis.json` — per-field and per-group breakdown
+- `results/run/pred_*.csv` — per-document predictions
+- LM-eval upload: [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval)
+
+<p align="center">
+  <img src="results/assets/ru_bank_ie_metrics.png" alt="ru-bank-ie aggregate metrics" width="720" />
+</p>
+
+<p align="center">
+  <img src="results/assets/ru_bank_ie_field_group_f1.png" alt="ru-bank-ie field group F1" width="720" />
+</p>
+
+<p align="center">
+  <img src="results/assets/ru_bank_ie_field_f1_by_label.png" alt="ru-bank-ie field F1 by label" width="720" />
+</p>
 
 ## Plot layout
 
 Within one subplot at most four metric groups appear as clustered bars. One bar is one model. One group is one metric.
-
-## Benchmark results
-
-Results appear after the Colab run and `scripts/push_results_github.py`. Summary table path: `results/assets/summary.csv`.
-
-<p align="center">
-  <img src="results/assets/ru_bank_ie_metrics.png" alt="ru-bank-ie metrics" width="720" />
-</p>
 
 ## License
 

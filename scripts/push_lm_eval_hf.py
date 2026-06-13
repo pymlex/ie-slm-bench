@@ -10,11 +10,12 @@ from pathlib import Path
 import pandas as pd
 from huggingface_hub import HfApi
 
+from ie_slm_bench.benchmark_summary import benchmark_results_markdown
 from ie_slm_bench.config import BENCHMARK, LM_EVAL_REPO, RUN_DIR
 from ie_slm_bench.metrics import safe_model_filename
 
 
-LM_EVAL_CARD = """---
+LM_EVAL_CARD_TEMPLATE = """---
 language:
 - ru
 license: gpl-3.0
@@ -30,6 +31,10 @@ tags:
 
 Evaluation artefacts for the `pymlex/ru-bank-ie` benchmark.
 Metrics are stored per model in `runs/` and aggregated in `results.json`.
+
+## Results summary
+
+{BENCHMARK_SECTION}
 
 ## Metrics
 
@@ -86,9 +91,14 @@ def main() -> None:
         raise FileNotFoundError(f"No metrics_summary_*.csv in {args.run_dir}")
 
     summary = pd.concat(summary_frames, ignore_index=True)
+    repo_root = Path(__file__).resolve().parents[1]
+    benchmark_section = benchmark_results_markdown(repo_root / "results")
+    if not benchmark_section:
+        benchmark_section = "See `results.json` in this repository."
+    card_text = LM_EVAL_CARD_TEMPLATE.replace("{BENCHMARK_SECTION}", benchmark_section)
     upload_dir = args.out_dir
     upload_dir.mkdir(parents=True, exist_ok=True)
-    (upload_dir / "README.md").write_text(LM_EVAL_CARD, encoding="utf-8")
+    (upload_dir / "README.md").write_text(card_text, encoding="utf-8")
 
     runs_dir = upload_dir / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
@@ -111,6 +121,17 @@ def main() -> None:
         encoding="utf-8",
     )
     summary.to_csv(upload_dir / "summary.csv", index=False)
+
+    assets_src = repo_root / "results" / "assets"
+    benchmark_assets_dir = upload_dir / "benchmark_assets"
+    benchmark_assets_dir.mkdir(parents=True, exist_ok=True)
+    if assets_src.exists():
+        for png in assets_src.glob("*.png"):
+            (benchmark_assets_dir / png.name).write_bytes(png.read_bytes())
+
+    analysis_src = repo_root / "results" / "analysis.json"
+    if analysis_src.exists():
+        (upload_dir / "analysis.json").write_bytes(analysis_src.read_bytes())
 
     api = HfApi()
     api.create_repo(args.repo_id, repo_type="dataset", exist_ok=True)
