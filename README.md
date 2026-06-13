@@ -117,7 +117,7 @@ Gold annotation example:
 
 Generation runs on Colab with `Qwen/Qwen3.5-4B` and Outlines.
 
-1. **Stage 1** — batched generation of 500 unique `BankClientExtraction` JSON objects with random field masks.
+1. **Stage 1** — batched Outlines generation of 500 independent `BankClientExtraction` JSON objects. Each sample draws a random keep ratio in $[0.2, 0.8]$ over all fields. Batching is for throughput only: prompts differ by diversity key, region, job, batch slot and used surnames.
 2. **Stage 2** — batched generation of chat-style client messages from each gold JSON. Null fields are omitted or deferred with phrases such as «укажу позже».
 3. **Stage 3** — batched Qwen coverage check. `coverage_ok` marks whether all non-null gold fields appear in the text. `missing_fields` lists gaps when `coverage_ok` is false.
 

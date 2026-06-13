@@ -142,13 +142,17 @@ def random_email(rng: np.random.Generator, token: str) -> str:
     return f"client_{token}@{domain}"
 
 
-def field_mask(rng: np.random.Generator, fields: list[str], fill_prob: float) -> dict[str, bool]:
-    flags = rng.random(len(fields)) < fill_prob
+def field_mask(rng: np.random.Generator, fields: list[str], keep_ratio: float) -> dict[str, bool]:
+    flags = rng.random(len(fields)) < keep_ratio
     return {field: bool(flags[index]) for index, field in enumerate(fields)}
 
 
-def build_prefill(rng: np.random.Generator, sample_id: int, field_keep: dict[str, bool]) -> dict:
-    gender = "м" if bool(rng.integers(0, 2)) else "ж"
+def build_prefill(
+    rng: np.random.Generator,
+    sample_id: int,
+    field_keep: dict[str, bool],
+    gender_hint: str,
+) -> dict:
     birth_date, birth_year = random_birth_date(rng)
     issue_year = int(rng.integers(birth_year + 14, 2026))
     issue_month = int(rng.integers(1, 13))
@@ -157,7 +161,7 @@ def build_prefill(rng: np.random.Generator, sample_id: int, field_keep: dict[str
     work_months = int(rng.integers(0, 12))
     prefill: dict = {}
     if field_keep["gender"]:
-        prefill["gender"] = gender
+        prefill["gender"] = gender_hint
     if field_keep["birth_date"]:
         prefill["birth_date"] = birth_date
     if field_keep["birth_year"]:
@@ -192,21 +196,27 @@ def build_gold_spec(
     sample_id: int,
     total: int,
     used_surnames: list[str],
+    batch_slot: int,
 ) -> dict:
-    field_keep = field_mask(rng, GOLD_FIELDS, fill_prob=0.82)
-    field_keep["surname"] = True
-    field_keep["name"] = True
-    field_keep["gender"] = True
-    prefill = build_prefill(rng, sample_id=sample_id, field_keep=field_keep)
-    gender = prefill.get("gender", "м" if bool(rng.integers(0, 2)) else "ж")
+    keep_ratio = float(rng.uniform(0.2, 0.8))
+    field_keep = field_mask(rng, GOLD_FIELDS, keep_ratio=keep_ratio)
+    gender_hint = "м" if bool(rng.integers(0, 2)) else "ж"
+    prefill = build_prefill(
+        rng,
+        sample_id=sample_id,
+        field_keep=field_keep,
+        gender_hint=gender_hint,
+    )
     return {
         "sample_id": sample_id,
         "total": total,
+        "batch_slot": batch_slot,
+        "keep_ratio": keep_ratio,
         "field_mask": field_keep,
         "prefill": prefill,
         "used_surnames": list(used_surnames[-40:]),
         "diversity_key": int(rng.integers(0, 1_000_000_000)),
         "region_hint": str(rng.choice(REGION_HINTS)),
         "job_hint": str(rng.choice(JOB_HINTS)),
-        "gender": gender,
+        "gender_hint": gender_hint,
     }

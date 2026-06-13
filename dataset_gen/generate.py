@@ -79,23 +79,29 @@ def main() -> None:
 
     if len(gold_rows) < args.n:
         used_surnames = collect_surnames(gold_rows)
-        sample_ids = list(range(len(gold_rows), args.n))
-        for sample_id in tqdm(sample_ids, desc="stage1 gold"):
-            spec = build_gold_spec(
-                rng,
-                sample_id=sample_id,
-                total=args.n,
-                used_surnames=used_surnames,
-            )
-            gold = backend.generate_gold_one(spec)
-            gold_rows.append(
-                {
-                    "id": sample_id,
-                    "gold_json": gold.model_dump_json(by_alias=True, exclude_none=False),
-                }
-            )
-            if gold.surname is not None:
-                used_surnames.append(gold.surname)
+        batch_starts = range(len(gold_rows), args.n, args.batch_size)
+        for batch_start in tqdm(batch_starts, desc="stage1 gold", total=len(batch_starts)):
+            sample_ids = list(range(batch_start, min(batch_start + args.batch_size, args.n)))
+            specs = [
+                build_gold_spec(
+                    rng,
+                    sample_id=sample_id,
+                    total=args.n,
+                    used_surnames=used_surnames,
+                    batch_slot=slot_index,
+                )
+                for slot_index, sample_id in enumerate(sample_ids)
+            ]
+            gold_models = backend.generate_gold_batch(specs)
+            for sample_id, gold in zip(sample_ids, gold_models):
+                gold_rows.append(
+                    {
+                        "id": sample_id,
+                        "gold_json": gold.model_dump_json(by_alias=True, exclude_none=False),
+                    }
+                )
+                if gold.surname is not None:
+                    used_surnames.append(gold.surname)
             save_jsonl(gold_rows, gold_path)
         print(f"stage1 complete: {len(gold_rows)} gold rows")
     else:
