@@ -8,17 +8,11 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
-pip install -q -r requirements.txt
-
-export TORCHDYNAMO_DISABLE=1
-
-if ! command -v gh >/dev/null 2>&1; then
+if command -v apt-get >/dev/null 2>&1; then
   apt-get update -qq
-  apt-get install -y -qq gh
+  apt-get install -y -qq build-essential
 fi
 
-if ! gh auth status >/dev/null 2>&1; then
-  gh auth login --web --git-protocol https
-fi
+pip install -q -r requirements.txt
 
 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"

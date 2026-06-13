@@ -4,6 +4,10 @@ import argparse
 import json
 from pathlib import Path
 
+from ie_slm_bench.env import load_env
+
+load_env()
+
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm

@@ -65,6 +65,7 @@ ie-slm-bench/
 │   └── generate.py
 ├── scripts/
 │   ├── install_colab.sh
+│   ├── install_ubuntu_jupyter.sh
 │   ├── generate_dataset.sh
 │   ├── run_all.sh
 │   ├── push_dataset_hf.py
@@ -191,6 +192,19 @@ $$
 ## Google Colab workflow
 
 Target hardware: NVIDIA L4 or RTX GPU. Models are loaded one at a time and released before the next model starts.
+
+### Ubuntu Jupyter
+
+```bash
+git clone https://github.com/pymlex/ie-slm-bench.git
+cd ie-slm-bench
+bash scripts/install_ubuntu_jupyter.sh
+cp .env.example .env
+bash scripts/generate_dataset.sh
+python scripts/push_dataset_hf.py
+```
+
+Outlines structured generation requires `build-essential` for Triton kernels, or `TORCHDYNAMO_DISABLE=1` which is set by default in install scripts.
 
 ### 1. Clone and install
 

@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 
 import outlines
+from ie_slm_bench.env import configure_torch_runtime
+
+configure_torch_runtime()
+
 import torch
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer

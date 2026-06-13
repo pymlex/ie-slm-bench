@@ -6,6 +6,10 @@ from pathlib import Path
 
 import outlines
 import pandas as pd
+from ie_slm_bench.env import configure_torch_runtime
+
+configure_torch_runtime()
+
 import torch
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
