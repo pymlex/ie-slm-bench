@@ -84,7 +84,7 @@ ie-slm-bench/
 
 ### ru-bank-ie
 
-Source: [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Synthetic Russian bank client messages paired with gold JSON annotations. Size $N=500$.
+Source: [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Synthetic Russian bank client messages paired with gold JSON annotations. The evaluation split contains coverage-valid pairs only. Current size $N=369$.
 
 Pydantic schema: `schemas/bank_client.py` with fixed Russian field aliases. Nested types: `Address`, `WorkExperience`.
 
@@ -119,11 +119,11 @@ Generation runs on Colab with `Qwen/Qwen3.5-4B` and Outlines.
 
 1. **Stage 1** — batched Outlines generation of 500 independent `BankClientExtraction` JSON objects. Each sample draws a random keep ratio in $[0.2, 0.8]$ over all fields. Batching is for throughput only: prompts differ by diversity key, region, job, batch slot and used surnames.
 2. **Stage 2** — batched generation of chat-style client messages from each gold JSON. Null fields are omitted or deferred with phrases such as «укажу позже».
-3. **Stage 3** — batched Qwen coverage check. `coverage_ok` marks whether all non-null gold fields appear in the text. `missing_fields` lists gaps when `coverage_ok` is false.
+3. **Stage 3** — batched Qwen coverage check into `validation_json` with `all_present`, `missing_fields`, `justification`. `test.jsonl` keeps only rows with `all_present=true`.
 
 ```bash
 bash scripts/generate_dataset.sh --n 500 --out-dir data/ru-bank-ie
-python scripts/push_dataset_hf.py
+bash scripts/finalize_and_push_dataset.sh --data-dir data/ru-bank-ie
 ```
 
 ## Sampling policy
@@ -135,7 +135,7 @@ $$
 \mathcal{I} = \mathrm{sort}\big(\mathrm{choice}(\{1,\ldots,N\},\,5000,\,\mathrm{seed}{=}42)\big)
 $$
 
-Current size: ru-bank-ie $N=500$. The full dataset is used.
+Current size: ru-bank-ie $N=369$ coverage-valid pairs from 500 generated stage-3 rows.
 
 ## Metrics
 

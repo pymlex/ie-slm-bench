@@ -28,9 +28,16 @@ size_categories:
 
 # pymlex/ru-bank-ie
 
-Russian bank client information extraction benchmark with 500 text-to-JSON pairs.
-Each example contains a chat-style client message and a gold `BankClientExtraction` JSON object.
-Fields may be `null` when absent from the source text.
+Russian bank client information extraction benchmark with coverage-validated text-to-JSON pairs.
+Each example contains a chat-style client message, a gold `BankClientExtraction` JSON object,
+and a separate `validation_json` coverage justification. Fields may be `null` when absent from the source text.
+
+## Columns
+
+- `id` — sample identifier
+- `text` — stage-2 client message
+- `gold_json` — gold `BankClientExtraction` JSON
+- `validation_json` — stage-3 coverage check with `all_present`, `missing_fields`, `justification`
 
 ## Schema
 
@@ -38,11 +45,11 @@ Fixed Pydantic schema in `schemas/bank_client.py` with Russian field aliases.
 
 ## Files
 
-- `test.jsonl` — evaluation split
+- `test.jsonl` — evaluation split, coverage-valid rows only
 - `test.csv` — same data in CSV
 - `stage1_gold.jsonl` — gold JSON profiles
 - `stage2_pairs.jsonl` — text prompts from gold JSON
-- `stage3_validated.jsonl` — coverage-checked pairs
+- `stage3_validated.jsonl` — all stage-2 pairs with `validation_json`
 
 ## Generation
 
@@ -50,7 +57,7 @@ Dataset built with `Qwen/Qwen3.5-4B` and Outlines constrained decoding on Colab.
 
 ```bash
 bash scripts/generate_dataset.sh --n 500
-python scripts/push_dataset_hf.py
+bash scripts/finalize_and_push_dataset.sh --data-dir data/ru-bank-ie
 ```
 
 ## Citation

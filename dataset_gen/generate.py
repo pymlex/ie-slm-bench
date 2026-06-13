@@ -9,9 +9,9 @@ from ie_slm_bench.env import load_env
 load_env()
 
 import numpy as np
-import pandas as pd
 from tqdm.auto import tqdm
 
+from dataset_gen.finalize import finalize_dataset, validated_row
 from dataset_gen.llm import GeneratorBackend
 from dataset_gen.masks import build_gold_spec
 from ie_slm_bench.config import DATASET_SIZE, DATA_DIR, GEN_BATCH_SIZE, SEED
@@ -138,13 +138,10 @@ def main() -> None:
 
             for row, coverage in zip(batch, coverages):
                 validated_rows.append(
-                    {
-                        "id": row["id"],
-                        "text": row["text"],
-                        "gold_json": row["gold_json"],
-                        "coverage_ok": coverage.all_present,
-                        "missing_fields": coverage.missing_fields,
-                    }
+                    validated_row(
+                        row,
+                        coverage,
+                    )
                 )
             save_jsonl(validated_rows, validated_path)
         print(f"stage3 complete: {len(validated_rows)} validated pairs")
@@ -154,10 +151,8 @@ def main() -> None:
     if backend is not None:
         backend.unload()
 
-    test_frame = pd.DataFrame(validated_rows)
-    test_frame.to_csv(out_dir / "test.csv", index=False)
-    save_jsonl(validated_rows, out_dir / "test.jsonl")
-    print(f"Saved {len(validated_rows)} pairs to {out_dir / 'test.jsonl'}")
+    stage3_count, test_count = finalize_dataset(out_dir)
+    print(f"Saved {test_count} valid pairs to {out_dir / 'test.jsonl'} from {stage3_count} stage3 rows")
 
 
 if __name__ == "__main__":

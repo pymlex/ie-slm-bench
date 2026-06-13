@@ -20,10 +20,7 @@ from ie_slm_bench.config import (
 from ie_slm_bench.parsers import parse_outlines_output
 from schemas.bank_client import BankClientExtraction, GoldProfileFill
 
-
-class CoverageCheck(BaseModel):
-    all_present: bool
-    missing_fields: list[str]
+CoverageCheck = CoverageValidation
 
 
 class GeneratorBackend:
@@ -134,7 +131,8 @@ class GeneratorBackend:
         return self._chat(
             (
                 "Проверь, что каждое непустое поле из JSON встречается в тексте клиента. "
-                "Верни JSON: all_present=true, если потерь нет, иначе перечисли missing_fields."
+                "Верни JSON: all_present, missing_fields, justification. "
+                "justification — короткое обоснование на русском языке."
             ),
             (
                 f"JSON:\n{json.dumps(gold_view, ensure_ascii=False)}\n\n"
