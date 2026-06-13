@@ -85,21 +85,29 @@ class GeneratorBackend:
 
     def _gold_prompt(self, spec: dict) -> str:
         avoid = ", ".join(spec["used_surnames"]) if spec["used_surnames"] else "нет"
+        prefill_view = {
+            key: (
+                value.model_dump(by_alias=True)
+                if isinstance(value, BaseModel)
+                else value
+            )
+            for key, value in spec["prefill"].items()
+        }
+        gender = spec["prefill"].get("gender", "м")
         return self._chat(
             (
                 "Ты создаёшь уникальный профиль клиента российского банка. "
-                "Верни один JSON по схеме BankClientExtraction с русскими alias полей."
+                "Верни полный JSON по схеме BankClientExtraction. "
+                "Все поля должны быть заполнены реалистичными значениями, кроме предзаполненных — их копируй без изменений."
             ),
             (
                 f"Образец {spec['sample_id'] + 1} из {spec['total']}.\n"
-                f"field_mask: {json.dumps(spec['field_mask'], ensure_ascii=False)}\n"
-                "Для полей с false в field_mask верни null.\n"
+                f"Предзаполненные поля: {json.dumps(prefill_view, ensure_ascii=False)}\n"
+                f"Пол клиента: {gender}. Фамилия, имя и отчество согласуй с полом.\n"
                 f"Не используй фамилии из списка: {avoid}.\n"
-                "Каждый образец должен отличаться: разные фамилии, имена, отчества, "
-                "города, улицы, работодатели. Не повторяй шаблоны Иванов, Иванова, Петров, Петрова, "
-                "Сидоров, Смирнов без существенных вариаций.\n"
-                "Пол только м или ж. ИНН 10 цифр. СНИЛС XXX-XXX-XXX XX. "
-                "Телефон +7XXXXXXXXXX."
+                "Каждый образец уникален: разные фамилии, имена, города, улицы, работодатели. "
+                "Не повторяй Иванов, Иванова, Петров, Петрова, Сидоров, Смирнов.\n"
+                "Фамилия и Имя обязательны. Заполни адреса, место работы, гражданство, место рождения."
             ),
         )
 
@@ -133,7 +141,8 @@ class GeneratorBackend:
         prompts = [self._gold_prompt(spec) for spec in specs]
         raw_list = self.gold_generator.batch(prompts, max_new_tokens=GEN_GOLD_MAX_NEW_TOKENS)
         models = self._parse_batch(raw_list, BankClientExtraction)
-        return [apply_field_mask(model, spec["field_mask"]) for model, spec in zip(models, specs)]
+        merged = [merge_prefill(model, spec["prefill"]) for model, spec in zip(models, specs)]
+        return [apply_field_mask(model, spec["field_mask"]) for model, spec in zip(merged, specs)]
 
     def generate_text_batch(self, golds: list[BankClientExtraction]) -> list[str]:
         prompts = [self._client_text_prompt(gold) for gold in golds]
@@ -156,6 +165,16 @@ class GeneratorBackend:
             max_new_tokens=GEN_COVERAGE_MAX_NEW_TOKENS,
         )
         return self._parse_batch(raw_list, CoverageCheck)
+
+
+def merge_prefill(model: BankClientExtraction, prefill: dict) -> BankClientExtraction:
+    values = model.model_dump()
+    for key, value in prefill.items():
+        if isinstance(value, BaseModel):
+            values[key] = value.model_dump()
+        else:
+            values[key] = value
+    return BankClientExtraction.model_validate(values)
 
 
 def apply_field_mask(model: BankClientExtraction, field_mask: dict[str, bool]) -> BankClientExtraction:
