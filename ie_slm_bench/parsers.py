@@ -6,23 +6,34 @@ from schemas.nerel import NerelEntity, NerelExtraction, NerelLink, NerelRelation
 from schemas.runne import RunneEntity, RunneExtraction
 
 
-def parse_nerel_entity_line(line: str) -> NerelEntity:
+def parse_nerel_entity_line(line: str, document_text: str) -> list[NerelEntity]:
     parts = line.split("\t")
     id_value = parts[0]
-    type_start_end = parts[1].split()
-    entity_type = type_start_end[0]
-    start = int(type_start_end[1])
-    end = int(type_start_end[2])
-    text = parts[2] if len(parts) > 2 else None
-    if text == "":
-        text = None
-    return NerelEntity(
-        id=id_value,
-        type=entity_type,
-        start=start,
-        end=end,
-        text=text,
-    )
+    type_and_spans = parts[1]
+    entity_type, span_blob = type_and_spans.split(maxsplit=1)
+    annotated_text = parts[2] if len(parts) > 2 else None
+    if annotated_text == "":
+        annotated_text = None
+    entities = []
+    span_groups = [group.strip() for group in span_blob.split(";")]
+    for group in span_groups:
+        start_str, end_str = group.split()
+        start = int(start_str)
+        end = int(end_str)
+        if len(span_groups) == 1:
+            text = annotated_text
+        else:
+            text = document_text[start:end]
+        entities.append(
+            NerelEntity(
+                id=id_value,
+                type=entity_type,
+                start=start,
+                end=end,
+                text=text,
+            )
+        )
+    return entities
 
 
 def parse_nerel_relation_line(line: str) -> NerelRelation:
@@ -58,7 +69,10 @@ def parse_nerel_link_line(line: str) -> NerelLink:
 
 
 def parse_nerel_gold(row: dict) -> NerelExtraction:
-    entities = [parse_nerel_entity_line(line) for line in row["entities"]]
+    document_text = row["text"]
+    entities = []
+    for line in row["entities"]:
+        entities.extend(parse_nerel_entity_line(line, document_text=document_text))
     relations = [parse_nerel_relation_line(line) for line in row["relations"]]
     links = [parse_nerel_link_line(line) for line in row["links"]]
     return NerelExtraction(entities=entities, relations=relations, links=links)
