@@ -97,23 +97,24 @@ class GeneratorBackend:
             )
             for key, value in spec["prefill"].items()
         }
-        gender = spec["prefill"].get("gender", "м")
+        gender = spec["gender"]
         return self._chat(
             (
-                "Ты создаёшь уникальный профиль клиента российского банка. "
-                "Верни JSON по схеме GoldProfileFill. "
-                "Поля Фамилия и Имя обязательны и не могут быть пустыми. "
-                "Остальные поля схемы заполни реалистичными уникальными значениями. "
-                "Предзаполненные поля копируй без изменений."
+                "Ты создаёшь один уникальный профиль клиента российского банка. "
+                "Верни полный JSON по схеме GoldProfileFill. "
+                "Заполни все поля схемы. Предзаполненные значения копируй без изменений. "
+                "Этот образец не связан с другими запросами."
             ),
             (
-                f"Образец {spec['sample_id'] + 1} из {spec['total']}.\n"
+                f"Уникальный ключ образца: {spec['diversity_key']}.\n"
+                f"Номер образца: {spec['sample_id'] + 1} из {spec['total']}.\n"
                 f"Предзаполненные поля: {json.dumps(prefill_view, ensure_ascii=False)}\n"
-                f"Пол клиента: {gender}. Фамилия, имя и отчество согласуй с полом.\n"
-                f"Не используй фамилии из списка: {avoid}.\n"
-                "Каждый образец уникален: разные фамилии, имена, города, улицы, работодатели. "
-                "Не повторяй Иванов, Иванова, Петров, Петрова, Сидоров, Смирнов.\n"
-                "Фамилия и Имя обязательны. Заполни адреса, место работы, гражданство, место рождения."
+                f"Пол: {gender}. Регион для адресов: {spec['region_hint']}. "
+                f"Сфера работы: {spec['job_hint']}.\n"
+                f"Не используй фамилии: {avoid}.\n"
+                "Фамилия и имя уникальны, согласованы с полом. "
+                "Оба адреса с городом, улицей и домом. "
+                "Не используй Иванов, Иванова, Петров, Петрова, Сидоров, Смирнов."
             ),
         )
 
@@ -143,15 +144,12 @@ class GeneratorBackend:
             ),
         )
 
-    def generate_gold_batch(self, specs: list[dict]) -> list[BankClientExtraction]:
-        prompts = [self._gold_prompt(spec) for spec in specs]
-        raw_list = self.gold_generator.batch(prompts, max_new_tokens=GEN_GOLD_MAX_NEW_TOKENS)
-        profiles = self._parse_batch(raw_list, GoldProfileFill)
-        merged = [
-            merge_profile_and_prefill(profile, spec["prefill"])
-            for profile, spec in zip(profiles, specs)
-        ]
-        return [apply_field_mask(model, spec["field_mask"]) for model, spec in zip(merged, specs)]
+    def generate_gold_one(self, spec: dict) -> BankClientExtraction:
+        prompt = self._gold_prompt(spec)
+        raw = self.gold_generator(prompt, max_new_tokens=GEN_GOLD_MAX_NEW_TOKENS)
+        profile = parse_outlines_output(raw, GoldProfileFill)
+        merged = merge_profile_and_prefill(profile, spec["prefill"])
+        return apply_field_mask(merged, spec["field_mask"])
 
     def generate_text_batch(self, golds: list[BankClientExtraction]) -> list[str]:
         prompts = [self._client_text_prompt(gold) for gold in golds]

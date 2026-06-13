@@ -35,6 +35,45 @@ GOLD_FIELDS = [
     "loans_count",
 ]
 
+REGION_HINTS = np.array(
+    [
+        "Москва",
+        "Санкт-Петербург",
+        "Казань",
+        "Екатеринбург",
+        "Новосибирск",
+        "Краснодар",
+        "Воронеж",
+        "Пермь",
+        "Уфа",
+        "Тюмень",
+        "Самара",
+        "Ростов-на-Дону",
+        "Владивосток",
+        "Иркутск",
+        "Калининград",
+    ],
+    dtype=object,
+)
+
+JOB_HINTS = np.array(
+    [
+        "логистическая компания",
+        "строительная организация",
+        "IT-компания",
+        "медицинский центр",
+        "торговая сеть",
+        "производственный комбинат",
+        "транспортная компания",
+        "образовательный центр",
+        "банковский филиал",
+        "рекламное агентство",
+        "фармацевтическая фирма",
+        "гостиничный комплекс",
+    ],
+    dtype=object,
+)
+
 
 def inn_checksum(digits: np.ndarray) -> int:
     weights1 = np.array([7, 2, 4, 10, 3, 5, 9, 4, 6, 8], dtype=np.int64)
@@ -70,15 +109,14 @@ def random_snils(rng: np.random.Generator) -> str:
 
 
 def random_passport_series_number(rng: np.random.Generator) -> str:
-    series = rng.integers(10, 99, size=2, dtype=np.int64)
-    series_tail = rng.integers(0, 100, size=2, dtype=np.int64)
-    number = rng.integers(0, 1_000_000, dtype=np.int64)
-    return f"{series[0]:02d}{series[1]:02d} {series_tail[0]:02d}{series_tail[1]:02d} {number:06d}"
+    series = int(rng.integers(0, 10000))
+    number = int(rng.integers(0, 1_000_000))
+    return f"{series:04d} {number:06d}"
 
 
 def random_department_code(rng: np.random.Generator) -> str:
-    left = rng.integers(100, 1000, dtype=np.int64)
-    right = rng.integers(0, 1000, dtype=np.int64)
+    left = int(rng.integers(100, 1000))
+    right = int(rng.integers(0, 1000))
     return f"{left:03d}-{right:03d}"
 
 
@@ -90,7 +128,7 @@ def random_birth_date(rng: np.random.Generator) -> tuple[str, int]:
 
 
 def random_phone(rng: np.random.Generator) -> str:
-    tail = rng.integers(0, 10_000_000, dtype=np.int64)
+    tail = int(rng.integers(0, 10_000_000))
     prefix = int(
         rng.choice(
             np.array([903, 905, 906, 909, 915, 916, 917, 919, 925, 926, 929, 977, 999], dtype=np.int64)
@@ -155,16 +193,20 @@ def build_gold_spec(
     total: int,
     used_surnames: list[str],
 ) -> dict:
-    field_keep = field_mask(rng, GOLD_FIELDS, fill_prob=0.72)
+    field_keep = field_mask(rng, GOLD_FIELDS, fill_prob=0.82)
     field_keep["surname"] = True
     field_keep["name"] = True
-    field_keep["patronymic"] = True
     field_keep["gender"] = True
     prefill = build_prefill(rng, sample_id=sample_id, field_keep=field_keep)
+    gender = prefill.get("gender", "м" if bool(rng.integers(0, 2)) else "ж")
     return {
         "sample_id": sample_id,
         "total": total,
         "field_mask": field_keep,
         "prefill": prefill,
-        "used_surnames": list(used_surnames[-30:]),
+        "used_surnames": list(used_surnames[-40:]),
+        "diversity_key": int(rng.integers(0, 1_000_000_000)),
+        "region_hint": str(rng.choice(REGION_HINTS)),
+        "job_hint": str(rng.choice(JOB_HINTS)),
+        "gender": gender,
     }
