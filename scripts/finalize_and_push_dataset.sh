@@ -10,5 +10,14 @@ fi
 
 export TORCHDYNAMO_DISABLE=1
 
+DATA_DIR="data/ru-bank-ie"
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--data-dir" ]; then
+    DATA_DIR="$arg"
+  fi
+  prev="$arg"
+done
+
 python scripts/finalize_dataset.py "$@"
-python scripts/push_dataset_hf.py --data-dir "${IE_SLM_DATA_DIR:-data/ru-bank-ie}"
+python scripts/push_dataset_hf.py --data-dir "$DATA_DIR"
