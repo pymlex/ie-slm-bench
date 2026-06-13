@@ -11,10 +11,18 @@ from ie_slm_bench.env import configure_torch_runtime
 configure_torch_runtime()
 
 import torch
+from pydantic import ValidationError
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from ie_slm_bench.config import BENCHMARK, LOAD_IN_4BIT, MAX_INPUT_CHARS, MAX_INPUT_TOKENS, SAVE_EVERY_N
+from ie_slm_bench.config import (
+    BENCHMARK,
+    INFER_RETRY_MAX_NEW_TOKENS,
+    LOAD_IN_4BIT,
+    MAX_INPUT_CHARS,
+    MAX_INPUT_TOKENS,
+    SAVE_EVERY_N,
+)
 from ie_slm_bench.parsers import parse_outlines_output
 from ie_slm_bench.prompts import SYSTEM_PROMPT, build_user_prompt, output_schema
 from schemas.bank_client import BankClientExtraction
@@ -89,11 +97,29 @@ class StructuredLmBackend:
             template_kwargs["enable_thinking"] = False
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 
+    def _parse_extraction(
+        self,
+        prompt: str,
+        raw: object,
+        max_new_tokens: int,
+    ) -> BankClientExtraction:
+        try:
+            return parse_outlines_output(raw, BankClientExtraction)
+        except ValidationError:
+            retry_raw = self.extraction_generator(
+                prompt,
+                max_new_tokens=INFER_RETRY_MAX_NEW_TOKENS,
+            )
+            return parse_outlines_output(retry_raw, BankClientExtraction)
+
     def _generate_batch(self, prompts: list[str], max_new_tokens: int) -> list[str]:
         raw_list = self.extraction_generator.batch(prompts, max_new_tokens=max_new_tokens)
         if not isinstance(raw_list, list):
             raw_list = [raw_list]
-        parsed_list = [parse_outlines_output(raw, BankClientExtraction) for raw in raw_list]
+        parsed_list = [
+            self._parse_extraction(prompt, raw, max_new_tokens)
+            for prompt, raw in zip(prompts, raw_list)
+        ]
         return [
             parsed.model_dump_json(by_alias=True, exclude_none=True)
             for parsed in parsed_list

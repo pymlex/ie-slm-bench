@@ -12,7 +12,7 @@ End-to-end benchmark for structured information extraction from Russian bank cli
 
 Dataset generator: `Qwen/Qwen3.5-4B` via `IE_SLM_GENERATOR_MODEL`.
 
-Shared inference settings: batched generation with left padding, `max_new_tokens=512`, bf16 on GPU by default, resume from partial `pred_*.csv`.
+Shared inference settings: batched generation with left padding, `max_new_tokens=1536`, bf16 on GPU by default, resume from partial `pred_*.csv`.
 
 ## Architecture
 
