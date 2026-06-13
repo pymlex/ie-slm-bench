@@ -7,7 +7,12 @@ import torch
 from pydantic import BaseModel, ConfigDict, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from ie_slm_bench.config import GENERATOR_MODEL, MAX_NEW_TOKENS
+from ie_slm_bench.config import (
+    GEN_COVERAGE_MAX_NEW_TOKENS,
+    GEN_JSON_MAX_NEW_TOKENS,
+    GEN_TEXT_MAX_NEW_TOKENS,
+    GENERATOR_MODEL,
+)
 from ie_slm_bench.parsers import parse_outlines_output
 from schemas.bank_client import Address, BankClientExtraction, WorkExperience
 
@@ -30,10 +35,6 @@ class PersonFill(BaseModel):
     actual_address: Address | None = Field(None, alias="Адрес фактического проживания")
 
 
-class ClientText(BaseModel):
-    text: str
-
-
 class CoverageCheck(BaseModel):
     all_present: bool
     missing_fields: list[str]
@@ -50,7 +51,6 @@ class GeneratorBackend:
         self.hf_model = None
         self.outlines_model = None
         self.person_generator = None
-        self.text_generator = None
         self.coverage_generator = None
 
     def load(self) -> None:
@@ -67,22 +67,22 @@ class GeneratorBackend:
         )
         self.outlines_model = outlines.from_transformers(self.hf_model, self.tokenizer)
         self.person_generator = outlines.Generator(self.outlines_model, PersonFill)
-        self.text_generator = outlines.Generator(self.outlines_model, ClientText)
         self.coverage_generator = outlines.Generator(self.outlines_model, CoverageCheck)
-        print(f"Generator {self.model_id}, batch_size={self.batch_size}, backend=outlines")
+        print(
+            f"Generator {self.model_id}, batch_size={self.batch_size}, "
+            f"text_max_new_tokens={GEN_TEXT_MAX_NEW_TOKENS}, backend=outlines"
+        )
 
     def unload(self) -> None:
         del self.hf_model
         del self.tokenizer
         del self.outlines_model
         del self.person_generator
-        del self.text_generator
         del self.coverage_generator
         self.hf_model = None
         self.tokenizer = None
         self.outlines_model = None
         self.person_generator = None
-        self.text_generator = None
         self.coverage_generator = None
         torch.cuda.empty_cache()
 
@@ -127,9 +127,10 @@ class GeneratorBackend:
                 "Ты пишешь фрагмент переписки клиента с сотрудником банка на русском языке. "
                 "Текст должен содержать только те данные, которые указаны в JSON. "
                 "Поля, отсутствующие в JSON, не упоминай и не выдумывай. "
-                "Допустимо написать, что часть данных клиент укажет позже."
+                "Допустимо написать, что часть данных клиент укажет позже. "
+                "Пиши 3–10 предложений, без markdown."
             ),
-            f"JSON клиента:\n{json.dumps(gold_view, ensure_ascii=False, indent=2)}",
+            f"JSON клиента:\n{json.dumps(gold_view, ensure_ascii=False)}",
         )
 
     def _coverage_prompt(self, text: str, gold: BankClientExtraction) -> str:
@@ -140,21 +141,22 @@ class GeneratorBackend:
                 "Верни JSON: all_present=true, если потерь нет, иначе перечисли missing_fields."
             ),
             (
-                f"JSON:\n{json.dumps(gold_view, ensure_ascii=False, indent=2)}\n\n"
+                f"JSON:\n{json.dumps(gold_view, ensure_ascii=False)}\n\n"
                 f"Текст:\n{text}"
             ),
         )
 
     def generate_person_fill_batch(self, skeletons: list[dict]) -> list[PersonFill]:
         prompts = [self._person_fill_prompt(skeleton) for skeleton in skeletons]
-        raw_list = self.person_generator.batch(prompts, max_new_tokens=MAX_NEW_TOKENS)
+        raw_list = self.person_generator.batch(prompts, max_new_tokens=GEN_JSON_MAX_NEW_TOKENS)
         return self._parse_batch(raw_list, PersonFill)
 
     def generate_text_batch(self, golds: list[BankClientExtraction]) -> list[str]:
         prompts = [self._client_text_prompt(gold) for gold in golds]
-        raw_list = self.text_generator.batch(prompts, max_new_tokens=MAX_NEW_TOKENS)
-        client_texts = self._parse_batch(raw_list, ClientText)
-        return [client_text.text for client_text in client_texts]
+        raw_list = self.outlines_model.batch(prompts, max_new_tokens=GEN_TEXT_MAX_NEW_TOKENS)
+        if not isinstance(raw_list, list):
+            raw_list = [raw_list]
+        return [str(raw).strip() for raw in raw_list]
 
     def check_coverage_batch(
         self,
@@ -165,7 +167,10 @@ class GeneratorBackend:
             self._coverage_prompt(text, gold)
             for text, gold in zip(texts, golds)
         ]
-        raw_list = self.coverage_generator.batch(prompts, max_new_tokens=256)
+        raw_list = self.coverage_generator.batch(
+            prompts,
+            max_new_tokens=GEN_COVERAGE_MAX_NEW_TOKENS,
+        )
         return self._parse_batch(raw_list, CoverageCheck)
 
 
