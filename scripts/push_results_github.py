@@ -10,8 +10,8 @@ from pathlib import Path
 from ie_slm_bench.config import RUN_DIR
 
 
-def git(args: list[str], cwd: Path) -> None:
-    subprocess.run(["git"] + args, cwd=cwd, check=True)
+def git(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(["git"] + args, cwd=cwd, check=check, text=True, capture_output=True)
 
 
 def main() -> None:
@@ -44,29 +44,42 @@ def main() -> None:
     results_root = repo_root / "results"
     results_root.mkdir(parents=True, exist_ok=True)
 
-    run_dest = results_root / "run"
+    run_dir = args.run_dir.resolve()
+    run_dest = (results_root / "run").resolve()
     assets_dest = results_root / "assets"
     run_dest.mkdir(parents=True, exist_ok=True)
     assets_dest.mkdir(parents=True, exist_ok=True)
 
-    for src in args.run_dir.rglob("*.csv"):
-        relative = src.relative_to(args.run_dir)
-        destination = run_dest / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(src.read_bytes())
+    if run_dir != run_dest:
+        for src in args.run_dir.rglob("*.csv"):
+            relative = src.relative_to(args.run_dir)
+            destination = run_dest / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(src.read_bytes())
 
-    assets_src = args.run_dir.parent / "assets"
-    if assets_src.exists():
-        for src in assets_src.glob("*"):
-            if src.is_file():
-                (assets_dest / src.name).write_bytes(src.read_bytes())
+        assets_src = args.run_dir.parent / "assets"
+        if assets_src.exists():
+            for src in assets_src.glob("*"):
+                if src.is_file():
+                    (assets_dest / src.name).write_bytes(src.read_bytes())
 
-    metrics_src = args.run_dir.parent / "metrics.json"
-    if metrics_src.exists():
-        (results_root / "metrics.json").write_bytes(metrics_src.read_bytes())
+        metrics_src = args.run_dir.parent / "metrics.json"
+        if metrics_src.exists():
+            (results_root / "metrics.json").write_bytes(metrics_src.read_bytes())
+    else:
+        print(f"Results already in {run_dest}, skipping copy")
 
     git(["add", "results/"], repo_root)
-    git(["commit", "-m", args.message], repo_root)
+    status = git(["status", "--porcelain", "results/"], repo_root, check=False)
+    if not status.stdout.strip():
+        print("No changes in results/ to commit")
+        return
+
+    commit = git(["commit", "-m", args.message], repo_root, check=False)
+    if commit.returncode != 0:
+        print(commit.stderr.strip() or commit.stdout.strip())
+        return
+
     git(["push", "origin", "HEAD"], repo_root)
     print("Pushed results to GitHub")
 

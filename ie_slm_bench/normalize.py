@@ -91,4 +91,4 @@ def normalize_field_value(path: str, value: str | None) -> str | None:
     if path == "Ежемесячный доход":
         digits = DIGITS_ONLY.sub("", stripped)
         return digits or stripped
-    return collapse_whitespace(stripped)
+    return collapse_whitespace(stripped).casefold()
