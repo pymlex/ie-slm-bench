@@ -126,28 +126,11 @@ def main() -> None:
             texts = [row["text"] for row in batch]
             coverages = backend.check_coverage_batch(texts, golds)
 
-            retry_indices = [
-                index
-                for index, coverage in enumerate(coverages)
-                if not coverage.all_present
-            ]
-            if retry_indices:
-                retry_golds = [golds[index] for index in retry_indices]
-                retry_texts = backend.generate_text_batch(retry_golds)
-                for local_index, global_index in enumerate(retry_indices):
-                    texts[global_index] = retry_texts[local_index]
-                retry_coverages = backend.check_coverage_batch(
-                    [texts[index] for index in retry_indices],
-                    retry_golds,
-                )
-                for local_index, global_index in enumerate(retry_indices):
-                    coverages[global_index] = retry_coverages[local_index]
-
-            for row, text, coverage in zip(batch, texts, coverages):
+            for row, coverage in zip(batch, coverages):
                 validated_rows.append(
                     {
                         "id": row["id"],
-                        "text": text,
+                        "text": row["text"],
                         "gold_json": row["gold_json"],
                         "coverage_ok": coverage.all_present,
                         "missing_fields": coverage.missing_fields,
