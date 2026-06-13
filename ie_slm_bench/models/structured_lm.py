@@ -85,10 +85,15 @@ class StructuredLmBackend:
             template_kwargs["enable_thinking"] = False
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 
-    def _generate_one(self, prompt: str, max_new_tokens: int) -> str:
-        raw = self.extraction_generator(prompt, max_new_tokens=max_new_tokens)
-        parsed = parse_outlines_output(raw, BankClientExtraction)
-        return parsed.model_dump_json(by_alias=True, exclude_none=True)
+    def _generate_batch(self, prompts: list[str], max_new_tokens: int) -> list[str]:
+        raw_list = self.extraction_generator.batch(prompts, max_new_tokens=max_new_tokens)
+        if not isinstance(raw_list, list):
+            raw_list = [raw_list]
+        parsed_list = [parse_outlines_output(raw, BankClientExtraction) for raw in raw_list]
+        return [
+            parsed.model_dump_json(by_alias=True, exclude_none=True)
+            for parsed in parsed_list
+        ]
 
     def predict_frame(
         self,
@@ -118,10 +123,8 @@ class StructuredLmBackend:
         ):
             batch_rows = pending.iloc[batch_start : batch_start + self.batch_size]
             started = time.time()
-            pred_raw_list = []
-            for _, row in batch_rows.iterrows():
-                prompt = self._format_prompt(row["text"])
-                pred_raw_list.append(self._generate_one(prompt, max_new_tokens=max_new_tokens))
+            prompts = [self._format_prompt(row["text"]) for _, row in batch_rows.iterrows()]
+            pred_raw_list = self._generate_batch(prompts, max_new_tokens=max_new_tokens)
             latency = time.time() - started
             per_item_latency = latency / len(batch_rows)
             for row_index, (_, row) in enumerate(batch_rows.iterrows()):

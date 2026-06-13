@@ -39,9 +39,13 @@ class CoverageCheck(BaseModel):
     missing_fields: list[str]
 
 
+SKELETON_META_KEYS = {"sample_id", "person_mask", "det_mask", "_gender"}
+
+
 class GeneratorBackend:
-    def __init__(self, model_id: str = GENERATOR_MODEL):
+    def __init__(self, model_id: str = GENERATOR_MODEL, batch_size: int = 8):
         self.model_id = model_id
+        self.batch_size = batch_size
         self.tokenizer = None
         self.hf_model = None
         self.outlines_model = None
@@ -65,6 +69,7 @@ class GeneratorBackend:
         self.person_generator = outlines.Generator(self.outlines_model, PersonFill)
         self.text_generator = outlines.Generator(self.outlines_model, ClientText)
         self.coverage_generator = outlines.Generator(self.outlines_model, CoverageCheck)
+        print(f"Generator {self.model_id}, batch_size={self.batch_size}, backend=outlines")
 
     def unload(self) -> None:
         del self.hf_model
@@ -93,23 +98,31 @@ class GeneratorBackend:
         }
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 
-    def generate_person_fill(self, skeleton: dict) -> PersonFill:
-        prompt = self._chat(
+    def _parse_batch(self, raw_list: list | str, model_cls: type[BaseModel]) -> list[BaseModel]:
+        if not isinstance(raw_list, list):
+            raw_list = [raw_list]
+        return [parse_outlines_output(raw, model_cls) for raw in raw_list]
+
+    def _person_fill_prompt(self, skeleton: dict) -> str:
+        fixed_fields = {
+            key: skeleton[key]
+            for key in skeleton
+            if key not in SKELETON_META_KEYS
+        }
+        return self._chat(
             "Ты заполняешь персональные поля клиента банка на русском языке. Верни только JSON по схеме.",
             (
                 "Сгенерируй фамилию, имя, отчество и адреса с учётом пола.\n"
                 f"Пол: {skeleton['_gender']}\n"
                 f"Заполняй только поля с true в person_mask, остальные оставь null.\n"
                 f"person_mask: {json.dumps(skeleton['person_mask'], ensure_ascii=False)}\n"
-                f"Уже зафиксированные поля: {json.dumps({key: skeleton[key] for key in skeleton if key not in {'sample_id', 'person_mask', 'det_mask', '_gender'}}, ensure_ascii=False)}"
+                f"Уже зафиксированные поля: {json.dumps(fixed_fields, ensure_ascii=False)}"
             ),
         )
-        raw = self.person_generator(prompt, max_new_tokens=MAX_NEW_TOKENS)
-        return parse_outlines_output(raw, PersonFill)
 
-    def generate_text(self, gold: BankClientExtraction) -> str:
+    def _client_text_prompt(self, gold: BankClientExtraction) -> str:
         gold_view = gold.model_dump(by_alias=True, exclude_none=True)
-        prompt = self._chat(
+        return self._chat(
             (
                 "Ты пишешь фрагмент переписки клиента с сотрудником банка на русском языке. "
                 "Текст должен содержать только те данные, которые указаны в JSON. "
@@ -118,13 +131,10 @@ class GeneratorBackend:
             ),
             f"JSON клиента:\n{json.dumps(gold_view, ensure_ascii=False, indent=2)}",
         )
-        raw = self.text_generator(prompt, max_new_tokens=MAX_NEW_TOKENS)
-        client_text = parse_outlines_output(raw, ClientText)
-        return client_text.text
 
-    def check_coverage(self, text: str, gold: BankClientExtraction) -> CoverageCheck:
+    def _coverage_prompt(self, text: str, gold: BankClientExtraction) -> str:
         gold_view = gold.model_dump(by_alias=True, exclude_none=True)
-        prompt = self._chat(
+        return self._chat(
             (
                 "Проверь, что каждое непустое поле из JSON встречается в тексте клиента. "
                 "Верни JSON: all_present=true, если потерь нет, иначе перечисли missing_fields."
@@ -134,8 +144,29 @@ class GeneratorBackend:
                 f"Текст:\n{text}"
             ),
         )
-        raw = self.coverage_generator(prompt, max_new_tokens=256)
-        return parse_outlines_output(raw, CoverageCheck)
+
+    def generate_person_fill_batch(self, skeletons: list[dict]) -> list[PersonFill]:
+        prompts = [self._person_fill_prompt(skeleton) for skeleton in skeletons]
+        raw_list = self.person_generator.batch(prompts, max_new_tokens=MAX_NEW_TOKENS)
+        return self._parse_batch(raw_list, PersonFill)
+
+    def generate_text_batch(self, golds: list[BankClientExtraction]) -> list[str]:
+        prompts = [self._client_text_prompt(gold) for gold in golds]
+        raw_list = self.text_generator.batch(prompts, max_new_tokens=MAX_NEW_TOKENS)
+        client_texts = self._parse_batch(raw_list, ClientText)
+        return [client_text.text for client_text in client_texts]
+
+    def check_coverage_batch(
+        self,
+        texts: list[str],
+        golds: list[BankClientExtraction],
+    ) -> list[CoverageCheck]:
+        prompts = [
+            self._coverage_prompt(text, gold)
+            for text, gold in zip(texts, golds)
+        ]
+        raw_list = self.coverage_generator.batch(prompts, max_new_tokens=256)
+        return self._parse_batch(raw_list, CoverageCheck)
 
 
 def merge_skeleton_and_person(skeleton: dict, person: PersonFill) -> BankClientExtraction:

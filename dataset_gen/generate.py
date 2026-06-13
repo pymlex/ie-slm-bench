@@ -39,27 +39,31 @@ def main() -> None:
     skeleton_rows = [build_skeleton(rng, sample_id=index) for index in range(args.n)]
     save_jsonl(skeleton_rows, out_dir / "stage1_skeletons.jsonl")
 
-    backend = GeneratorBackend()
+    backend = GeneratorBackend(batch_size=args.batch_size)
     backend.load()
+
     gold_rows = []
-    for skeleton in tqdm(skeleton_rows, desc="stage2 gold"):
-        person = backend.generate_person_fill(skeleton)
-        gold = merge_skeleton_and_person(skeleton, person)
-        gold_rows.append(
-            {
-                "id": skeleton["sample_id"],
-                "gold_json": gold.model_dump_json(by_alias=True, exclude_none=False),
-            }
-        )
-    save_jsonl(gold_rows, out_dir / "stage2_gold.jsonl")
+    batch_starts = range(0, len(skeleton_rows), args.batch_size)
+    for batch_start in tqdm(batch_starts, desc="stage2 gold", total=len(batch_starts)):
+        batch = skeleton_rows[batch_start : batch_start + args.batch_size]
+        persons = backend.generate_person_fill_batch(batch)
+        for skeleton, person in zip(batch, persons):
+            gold = merge_skeleton_and_person(skeleton, person)
+            gold_rows.append(
+                {
+                    "id": skeleton["sample_id"],
+                    "gold_json": gold.model_dump_json(by_alias=True, exclude_none=False),
+                }
+            )
+        save_jsonl(gold_rows, out_dir / "stage2_gold.jsonl")
 
     pair_rows = []
-    batch_starts = range(0, len(gold_rows), args.batch_size)
-    for batch_start in tqdm(batch_starts, desc="stage3 texts"):
+    gold_batch_starts = range(0, len(gold_rows), args.batch_size)
+    for batch_start in tqdm(gold_batch_starts, desc="stage3 texts", total=len(gold_batch_starts)):
         batch = gold_rows[batch_start : batch_start + args.batch_size]
-        for row in batch:
-            gold = BankClientExtraction.model_validate_json(row["gold_json"])
-            text = backend.generate_text(gold)
+        golds = [BankClientExtraction.model_validate_json(row["gold_json"]) for row in batch]
+        texts = backend.generate_text_batch(golds)
+        for row, text in zip(batch, texts):
             pair_rows.append(
                 {
                     "id": row["id"],
@@ -70,23 +74,41 @@ def main() -> None:
         save_jsonl(pair_rows, out_dir / "stage3_pairs.jsonl")
 
     validated_rows = []
-    for row in tqdm(pair_rows, desc="stage4 coverage"):
-        gold = BankClientExtraction.model_validate_json(row["gold_json"])
-        coverage = backend.check_coverage(row["text"], gold)
-        text = row["text"]
-        if not coverage.all_present:
-            text = backend.generate_text(gold)
-            coverage = backend.check_coverage(text, gold)
-        validated_rows.append(
-            {
-                "id": row["id"],
-                "text": text,
-                "gold_json": row["gold_json"],
-                "coverage_ok": coverage.all_present,
-                "missing_fields": coverage.missing_fields,
-            }
-        )
-    save_jsonl(validated_rows, out_dir / "stage4_validated.jsonl")
+    pair_batch_starts = range(0, len(pair_rows), args.batch_size)
+    for batch_start in tqdm(pair_batch_starts, desc="stage4 coverage", total=len(pair_batch_starts)):
+        batch = pair_rows[batch_start : batch_start + args.batch_size]
+        golds = [BankClientExtraction.model_validate_json(row["gold_json"]) for row in batch]
+        texts = [row["text"] for row in batch]
+        coverages = backend.check_coverage_batch(texts, golds)
+
+        retry_indices = [
+            index
+            for index, coverage in enumerate(coverages)
+            if not coverage.all_present
+        ]
+        if retry_indices:
+            retry_golds = [golds[index] for index in retry_indices]
+            retry_texts = backend.generate_text_batch(retry_golds)
+            for local_index, global_index in enumerate(retry_indices):
+                texts[global_index] = retry_texts[local_index]
+            retry_coverages = backend.check_coverage_batch(
+                [texts[index] for index in retry_indices],
+                retry_golds,
+            )
+            for local_index, global_index in enumerate(retry_indices):
+                coverages[global_index] = retry_coverages[local_index]
+
+        for row, text, coverage in zip(batch, texts, coverages):
+            validated_rows.append(
+                {
+                    "id": row["id"],
+                    "text": text,
+                    "gold_json": row["gold_json"],
+                    "coverage_ok": coverage.all_present,
+                    "missing_fields": coverage.missing_fields,
+                }
+            )
+        save_jsonl(validated_rows, out_dir / "stage4_validated.jsonl")
 
     backend.unload()
 
