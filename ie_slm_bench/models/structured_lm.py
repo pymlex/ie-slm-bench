@@ -93,7 +93,7 @@ class StructuredLmBackend:
             "tokenize": False,
             "add_generation_prompt": True,
         }
-        if self.backend_kind in {"causal", "lfm", "nuextract"} and "qwen3" in self.model_id.lower():
+        if self.backend_kind in {"causal", "lfm"} and "qwen3" in self.model_id.lower():
             template_kwargs["enable_thinking"] = False
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 

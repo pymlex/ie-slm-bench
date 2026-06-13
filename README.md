@@ -7,7 +7,7 @@ End-to-end benchmark for structured information extraction from Russian bank cli
 | Display name | Hugging Face registry id | Effective params | Batch size default | Structured output |
 |---|---|---|---|---|
 | `Qwen/Qwen3-1.7B` | `Qwen/Qwen3-1.7B` | 1.7B | 16 | `BankClientExtraction` via Outlines |
-| `olava-extract` | `IE_SLM_OLAVA_ID` default `numind/NuExtract-2.0-2B` | 2B MoE IE | 12 | `BankClientExtraction` via Outlines |
+| `olava-extract` | `IE_SLM_OLAVA_ID` default `numind/NuExtract-2.0-2B` | 2B VL IE | 12 | NuExtract template + `BankClientExtraction` |
 | `tiny-pal` | `IE_SLM_TINY_PAL_ID` default `LiquidAI/LFM2-1.2B-Extract` | 1.2B Extract | 24 | `BankClientExtraction` via Outlines |
 
 Dataset generator: `Qwen/Qwen3.5-4B` via `IE_SLM_GENERATOR_MODEL`.
