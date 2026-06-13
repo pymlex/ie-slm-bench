@@ -11,7 +11,10 @@ load_env()
 
 SEED = int(os.environ.get("IE_SLM_SEED", "42"))
 MAX_SAMPLES = int(os.environ.get("IE_SLM_MAX_SAMPLES", "5000"))
-MAX_NEW_TOKENS = int(os.environ.get("IE_SLM_MAX_NEW_TOKENS", "4096"))
+MAX_NEW_TOKENS = int(os.environ.get("IE_SLM_MAX_NEW_TOKENS", "1024"))
+MAX_INPUT_CHARS = int(os.environ.get("IE_SLM_MAX_INPUT_CHARS", "6000"))
+LOAD_IN_4BIT = os.environ.get("IE_SLM_LOAD_IN_4BIT", "1") == "1"
+SAVE_EVERY_N = int(os.environ.get("IE_SLM_SAVE_EVERY_N", "1"))
 RUN_DIR = Path(os.environ.get("IE_SLM_RUN_DIR", "results/run"))
 
 NEREL_DATASET = os.environ.get("IE_SLM_NEREL_DATASET", "iluvvatar/NEREL")

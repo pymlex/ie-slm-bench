@@ -42,10 +42,14 @@ def run_benchmark_for_model(
         gold_frame,
         benchmark=benchmark,
         max_new_tokens=max_new_tokens,
+        pred_path=pred_path,
     )
     backend.unload()
     pred_frame.to_csv(pred_path, index=False)
-    print(f"Saved predictions to {pred_path} in {time.time() - started:.1f}s")
+    print(
+        f"Saved {len(pred_frame)} predictions to {pred_path} "
+        f"in {time.time() - started:.1f}s"
+    )
 
     model_cls = benchmark_schema(benchmark)
     per_example, per_label = evaluate_predictions(

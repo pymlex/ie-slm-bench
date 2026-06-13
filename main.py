@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 
-import pynvml
 import torch
 
 from ie_slm_bench.env import load_env
@@ -61,9 +60,9 @@ def main():
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    pynvml.nvmlInit()
     if torch.cuda.is_available():
         print("GPU:", torch.cuda.get_device_name(0))
+        print("VRAM allocated GB:", round(torch.cuda.memory_allocated() / 1e9, 2))
     else:
         print("GPU: none")
 

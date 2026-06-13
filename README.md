@@ -11,7 +11,7 @@ End-to-end benchmark for structured information extraction from arbitrary Russia
 | `olava-extract` | `IE_SLM_OLAVA_ID` default `numind/NuExtract-2.0-2B` | 2B MoE IE | template-driven JSON extraction |
 | `tiny-pal` | `IE_SLM_TINY_PAL_ID` default `LiquidAI/LFM2-1.2B-Extract` | 1.2B Extract | template-driven JSON extraction |
 
-Shared inference settings: `max_new_tokens=4096`, greedy decoding `do_sample=False`, temperature not used.
+Shared inference settings: `max_new_tokens=1024`, greedy decoding `do_sample=False`, 4-bit loading on GPU by default, resume from partial `pred_*.csv`.
 
 Override registry ids in `.env` before launch:
 
@@ -210,7 +210,7 @@ bash scripts/install_colab.sh
 
 ### 2. Secrets
 
-Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GEMMA_ID`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`.
+Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GEMMA_ID`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_MAX_INPUT_CHARS`, `IE_SLM_LOAD_IN_4BIT`, `IE_SLM_SAVE_EVERY_N`.
 
 ```bash
 cp .env.example .env
@@ -263,6 +263,8 @@ python scripts/push_results_github.py --message "Colab: IE SLM benchmark results
 ```
 
 `GITHUB_NAME` and `GITHUB_EMAIL` from `.env` are applied to the local git config before commit.
+
+Interrupted runs resume automatically from `results/run/<benchmark>/pred_<model>.csv`.
 
 ### Full pipeline
 
