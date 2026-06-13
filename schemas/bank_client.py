@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Address(BaseModel):
@@ -35,7 +35,7 @@ class BankClientExtraction(BaseModel):
     passport_issued_by: str | None = Field(None, alias="Кем выдан паспорт", max_length=240)
     passport_issue_date: str | None = Field(None, alias="Дата выдачи паспорта", max_length=16)
     passport_department_code: str | None = Field(None, alias="Код подразделения", max_length=16)
-    inn: str | None = Field(None, alias="ИНН", max_length=12)
+    inn: int | None = Field(None, alias="ИНН", ge=0, le=999999999999)
     snils: str | None = Field(None, alias="СНИЛС", max_length=14)
     registration_address: Address | None = Field(None, alias="Адрес регистрации")
     actual_address: Address | None = Field(None, alias="Адрес фактического проживания")
@@ -44,12 +44,24 @@ class BankClientExtraction(BaseModel):
     employer: str | None = Field(None, alias="Место работы", max_length=160)
     job_title: str | None = Field(None, alias="Должность на работе", max_length=120)
     work_experience: WorkExperience | None = Field(None, alias="Стаж работы")
-    monthly_income: str | None = Field(None, alias="Ежемесячный доход", max_length=24)
+    monthly_income: int | None = Field(None, alias="Ежемесячный доход", ge=0, le=999999999)
     marital_status: str | None = Field(None, alias="Семейное положение", max_length=80)
-    dependents_count: int | None = Field(None, alias="Количество иждивенцев")
+    dependents_count: int | None = Field(None, alias="Количество иждивенцев", ge=0, le=20)
     real_estate: str | None = Field(None, alias="Наличие недвижимости", max_length=80)
     car: str | None = Field(None, alias="Наличие автомобиля", max_length=80)
-    loans_count: int | None = Field(None, alias="Наличие кредитов/займов")
+    loans_count: int | None = Field(None, alias="Наличие кредитов/займов", ge=0, le=50)
+
+    @field_validator("inn", "monthly_income", mode="before")
+    @classmethod
+    def coerce_int_fields(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped == "":
+                return None
+            return int(stripped)
+        return value
 
 
 class GoldAddressFill(BaseModel):

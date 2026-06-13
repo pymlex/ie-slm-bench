@@ -103,14 +103,21 @@ class StructuredLmBackend:
         raw: object,
         max_new_tokens: int,
     ) -> BankClientExtraction:
+        token_limits = [max_new_tokens, INFER_RETRY_MAX_NEW_TOKENS]
         try:
             return parse_outlines_output(raw, BankClientExtraction)
         except ValidationError:
-            retry_raw = self.extraction_generator(
-                prompt,
-                max_new_tokens=INFER_RETRY_MAX_NEW_TOKENS,
-            )
-            return parse_outlines_output(retry_raw, BankClientExtraction)
+            token_limits = token_limits[1:]
+
+        for limit in token_limits:
+            retry_raw = self.extraction_generator(prompt, max_new_tokens=limit)
+            try:
+                return parse_outlines_output(retry_raw, BankClientExtraction)
+            except ValidationError:
+                continue
+
+        print("Warning: extraction failed after retries, using empty prediction")
+        return BankClientExtraction()
 
     def _generate_batch(self, prompts: list[str], max_new_tokens: int) -> list[str]:
         raw_list = self.extraction_generator.batch(prompts, max_new_tokens=max_new_tokens)

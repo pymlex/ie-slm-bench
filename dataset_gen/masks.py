@@ -173,7 +173,7 @@ def build_prefill(
     if field_keep["passport_department_code"]:
         prefill["passport_department_code"] = random_department_code(rng)
     if field_keep["inn"]:
-        prefill["inn"] = random_inn(rng)
+        prefill["inn"] = int(random_inn(rng))
     if field_keep["snils"]:
         prefill["snils"] = random_snils(rng)
     if field_keep["mobile_phone"]:
@@ -181,7 +181,7 @@ def build_prefill(
     if field_keep["email"]:
         prefill["email"] = random_email(rng, str(sample_id))
     if field_keep["monthly_income"]:
-        prefill["monthly_income"] = str(int(rng.integers(35_000, 350_000)))
+        prefill["monthly_income"] = int(rng.integers(35_000, 350_000))
     if field_keep["dependents_count"]:
         prefill["dependents_count"] = int(rng.integers(0, 5))
     if field_keep["loans_count"]:
