@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ie_slm_bench.config import GENERATOR_MODEL, MAX_NEW_TOKENS
+from ie_slm_bench.parsers import parse_outlines_output
 from schemas.bank_client import Address, BankClientExtraction, WorkExperience
 
 
@@ -44,6 +45,9 @@ class GeneratorBackend:
         self.tokenizer = None
         self.hf_model = None
         self.outlines_model = None
+        self.person_generator = None
+        self.text_generator = None
+        self.coverage_generator = None
 
     def load(self) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True)
@@ -52,20 +56,29 @@ class GeneratorBackend:
         self.tokenizer.padding_side = "left"
         self.hf_model = AutoModelForCausalLM.from_pretrained(
             self.model_id,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
             attn_implementation="sdpa",
         )
         self.outlines_model = outlines.from_transformers(self.hf_model, self.tokenizer)
+        self.person_generator = outlines.Generator(self.outlines_model, PersonFill)
+        self.text_generator = outlines.Generator(self.outlines_model, ClientText)
+        self.coverage_generator = outlines.Generator(self.outlines_model, CoverageCheck)
 
     def unload(self) -> None:
         del self.hf_model
         del self.tokenizer
         del self.outlines_model
+        del self.person_generator
+        del self.text_generator
+        del self.coverage_generator
         self.hf_model = None
         self.tokenizer = None
         self.outlines_model = None
+        self.person_generator = None
+        self.text_generator = None
+        self.coverage_generator = None
         torch.cuda.empty_cache()
 
     def _chat(self, system: str, user: str) -> str:
@@ -91,7 +104,8 @@ class GeneratorBackend:
                 f"Уже зафиксированные поля: {json.dumps({key: skeleton[key] for key in skeleton if key not in {'sample_id', 'person_mask', 'det_mask', '_gender'}}, ensure_ascii=False)}"
             ),
         )
-        return self.outlines_model(prompt, PersonFill, max_new_tokens=MAX_NEW_TOKENS)
+        raw = self.person_generator(prompt, max_new_tokens=MAX_NEW_TOKENS)
+        return parse_outlines_output(raw, PersonFill)
 
     def generate_text(self, gold: BankClientExtraction) -> str:
         gold_view = gold.model_dump(by_alias=True, exclude_none=True)
@@ -104,7 +118,8 @@ class GeneratorBackend:
             ),
             f"JSON клиента:\n{json.dumps(gold_view, ensure_ascii=False, indent=2)}",
         )
-        client_text = self.outlines_model(prompt, ClientText, max_new_tokens=MAX_NEW_TOKENS)
+        raw = self.text_generator(prompt, max_new_tokens=MAX_NEW_TOKENS)
+        client_text = parse_outlines_output(raw, ClientText)
         return client_text.text
 
     def check_coverage(self, text: str, gold: BankClientExtraction) -> CoverageCheck:
@@ -119,7 +134,8 @@ class GeneratorBackend:
                 f"Текст:\n{text}"
             ),
         )
-        return self.outlines_model(prompt, CoverageCheck, max_new_tokens=256)
+        raw = self.coverage_generator(prompt, max_new_tokens=256)
+        return parse_outlines_output(raw, CoverageCheck)
 
 
 def merge_skeleton_and_person(skeleton: dict, person: PersonFill) -> BankClientExtraction:

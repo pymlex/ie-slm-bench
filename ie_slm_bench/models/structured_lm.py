@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from ie_slm_bench.config import BENCHMARK, LOAD_IN_4BIT, MAX_INPUT_CHARS, MAX_INPUT_TOKENS, SAVE_EVERY_N
+from ie_slm_bench.parsers import parse_outlines_output
 from ie_slm_bench.prompts import SYSTEM_PROMPT, build_user_prompt, output_schema
 from schemas.bank_client import BankClientExtraction
 
@@ -28,6 +29,7 @@ class StructuredLmBackend:
         self.hf_model = None
         self.tokenizer = None
         self.outlines_model = None
+        self.extraction_generator = None
 
     def _quantization_config(self) -> BitsAndBytesConfig | None:
         if not LOAD_IN_4BIT:
@@ -56,14 +58,17 @@ class StructuredLmBackend:
         self.tokenizer.padding_side = "left"
         self.hf_model = AutoModelForCausalLM.from_pretrained(self.model_id, **model_kwargs)
         self.outlines_model = outlines.from_transformers(self.hf_model, self.tokenizer)
+        self.extraction_generator = outlines.Generator(self.outlines_model, BankClientExtraction)
 
     def unload(self) -> None:
         del self.hf_model
         del self.tokenizer
         del self.outlines_model
+        del self.extraction_generator
         self.hf_model = None
         self.tokenizer = None
         self.outlines_model = None
+        self.extraction_generator = None
         torch.cuda.empty_cache()
 
     def _format_prompt(self, text: str) -> str:
@@ -81,8 +86,9 @@ class StructuredLmBackend:
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 
     def _generate_one(self, prompt: str, max_new_tokens: int) -> str:
-        result = self.outlines_model(prompt, BankClientExtraction, max_new_tokens=max_new_tokens)
-        return result.model_dump_json(by_alias=True, exclude_none=True)
+        raw = self.extraction_generator(prompt, max_new_tokens=max_new_tokens)
+        parsed = parse_outlines_output(raw, BankClientExtraction)
+        return parsed.model_dump_json(by_alias=True, exclude_none=True)
 
     def predict_frame(
         self,

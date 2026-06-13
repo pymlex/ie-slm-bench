@@ -10,5 +10,5 @@ seaborn>=0.13.0
 pydantic>=2.8.0
 tqdm>=4.66.0
 python-dotenv>=1.0.0
-outlines>=0.1.11
+outlines>=1.0.0,<2.0.0
 bitsandbytes>=0.43.0

@@ -20,3 +20,11 @@ def extract_json_object(text: str) -> dict:
 def load_extraction(raw_json: str, model_cls: type[BaseModel]) -> BaseModel:
     payload = json.loads(raw_json)
     return model_cls.model_validate(payload)
+
+
+def parse_outlines_output(raw: str | BaseModel | dict, model_cls: type[BaseModel]) -> BaseModel:
+    if isinstance(raw, model_cls):
+        return raw
+    if isinstance(raw, dict):
+        return model_cls.model_validate(raw)
+    return model_cls.model_validate_json(str(raw))
