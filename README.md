@@ -13,12 +13,11 @@ End-to-end benchmark for structured information extraction from arbitrary Russia
 
 Shared inference settings: `max_new_tokens=4096`, greedy decoding `do_sample=False`, temperature not used.
 
-Override registry ids in Colab before launch:
+Override registry ids in `.env` before launch:
 
-```python
-import os
-os.environ["IE_SLM_OLAVA_ID"] = "olava/olava-extract-2b-moe"
-os.environ["IE_SLM_TINY_PAL_ID"] = "tiny-pal/tiny-pal-2.8b-extract"
+```bash
+IE_SLM_OLAVA_ID=olava/olava-extract-2b-moe
+IE_SLM_TINY_PAL_ID=tiny-pal/tiny-pal-2.8b-extract
 ```
 
 ## Architecture
@@ -69,8 +68,10 @@ ie-slm-bench/
 │   └── runne.py
 ├── scripts/
 │   ├── install_colab.sh
+│   ├── run_all.sh
 │   ├── setup_gh_auth.py
 │   └── push_results_github.py
+├── .env.example
 ├── main.py
 ├── results/
 │   ├── run/
@@ -195,7 +196,7 @@ $$
 
 ## Google Colab workflow
 
-Target hardware: NVIDIA L4 GPU. Models are loaded one at a time and released before the next model starts.
+Target hardware: NVIDIA L4 GPU. Models are loaded one at a time and released before the next model starts. Open a terminal in Colab and run the commands below.
 
 ### 1. Clone and install
 
@@ -205,62 +206,68 @@ cd ie-slm-bench
 bash scripts/install_colab.sh
 ```
 
-`install_colab.sh` installs Python dependencies and runs `gh auth login --web` when GitHub CLI is not authenticated. Browser login does not require `sudo`.
+`install_colab.sh` copies `.env.example` to `.env` when `.env` is missing, installs Python dependencies, and runs `gh auth login --web` when GitHub CLI is not authenticated. Browser login does not require `sudo`.
 
 ### 2. Secrets
 
-```python
-import os
-from google.colab import userdata
-os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")
+Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GEMMA_ID`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`.
+
+```bash
+cp .env.example .env
 ```
 
-Optional overrides: `IE_SLM_GEMMA_ID`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`.
+All entrypoints load variables from `.env` via `python-dotenv`.
 
 ### 3. Authenticate GitHub for result push
 
-```python
-!python scripts/setup_gh_auth.py
+```bash
+python scripts/setup_gh_auth.py
 ```
 
 ### 4. Run full benchmark
 
 All four models on both benchmarks:
 
-```python
-!python main.py --all-models --run-dir results/run
+```bash
+python main.py --all-models --run-dir results/run
 ```
 
 Single model subset:
 
-```python
-!python main.py --models Qwen/Qwen3-1.7B --benchmarks nerel runne --run-dir results/run
+```bash
+python main.py --models Qwen/Qwen3-1.7B --benchmarks nerel runne --run-dir results/run
 ```
 
 NEREL only:
 
-```python
-!python main.py --all-models --benchmarks nerel --run-dir results/run
+```bash
+python main.py --all-models --benchmarks nerel --run-dir results/run
 ```
 
 RuNNE only:
 
-```python
-!python main.py --all-models --benchmarks runne --run-dir results/run
+```bash
+python main.py --all-models --benchmarks runne --run-dir results/run
 ```
 
 Rebuild plots from existing CSV without inference:
 
-```python
-!python main.py --plots-only --run-dir results/run
+```bash
+python main.py --plots-only --run-dir results/run
 ```
 
 ### 5. Push results to GitHub
 
-```python
-!git config user.email "you@example.com"
-!git config user.name "pymlex"
-!python scripts/push_results_github.py --message "Colab: IE SLM benchmark results"
+```bash
+python scripts/push_results_github.py --message "Colab: IE SLM benchmark results"
+```
+
+`GITHUB_NAME` and `GITHUB_EMAIL` from `.env` are applied to the local git config before commit.
+
+### Full pipeline
+
+```bash
+bash scripts/run_all.sh
 ```
 
 Tracked artefacts:

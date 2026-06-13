@@ -3,6 +3,7 @@ from __future__ import annotations
 import _bootstrap  # noqa: F401
 
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -33,6 +34,13 @@ def main() -> None:
     args = parser.parse_args()
 
     repo_root = args.repo_root
+    github_name = os.environ.get("GITHUB_NAME")
+    github_email = os.environ.get("GITHUB_EMAIL")
+    if github_name:
+        git(["config", "user.name", github_name], repo_root)
+    if github_email:
+        git(["config", "user.email", github_email], repo_root)
+
     results_root = repo_root / "results"
     results_root.mkdir(parents=True, exist_ok=True)
 

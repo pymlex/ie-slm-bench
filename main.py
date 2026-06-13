@@ -7,6 +7,10 @@ from pathlib import Path
 import pynvml
 import torch
 
+from ie_slm_bench.env import load_env
+
+load_env()
+
 from ie_slm_bench.config import ALL_MODEL_IDS, DEFAULT_MODEL_IDS, MAX_NEW_TOKENS, RUN_DIR
 from ie_slm_bench.evaluate import run_models
 from ie_slm_bench.plots import generate_all_plots

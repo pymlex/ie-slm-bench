@@ -3,6 +3,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ie_slm_bench.env import load_env
+
+
+load_env()
+
 
 SEED = int(os.environ.get("IE_SLM_SEED", "42"))
 MAX_SAMPLES = int(os.environ.get("IE_SLM_MAX_SAMPLES", "5000"))

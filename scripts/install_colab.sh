@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+if [ ! -f .env ]; then
+  cp .env.example .env
+fi
+
 pip install -q -r requirements.txt
 
 if ! command -v gh >/dev/null 2>&1; then
