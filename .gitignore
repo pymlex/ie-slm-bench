@@ -217,5 +217,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-data/ru-bank-ie/
+data/ru-bank-ie/*
+!data/ru-bank-ie/.gitkeep
 results/lm-eval-upload/
