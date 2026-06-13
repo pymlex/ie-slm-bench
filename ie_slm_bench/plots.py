@@ -72,6 +72,49 @@ DISPLAY_NAMES = {
     "LiquidAI/LFM2-1.2B-Extract": "LFM2-1.2B-Extract",
 }
 
+ADDRESS_LABEL_PREFIXES = (
+    "Адрес регистрации.",
+    "Адрес фактического проживания.",
+)
+
+LABEL_PLOT_PANELS = [
+    ("Identity", FIELD_GROUPS["Identity"]),
+    ("Passport", FIELD_GROUPS["Passport"]),
+    ("IDs, contact & addresses", FIELD_GROUPS["IDs & contact"]),
+    ("Work & assets", FIELD_GROUPS["Work"] + FIELD_GROUPS["Assets & family"]),
+]
+
+
+def _address_labels(all_labels: list[str]) -> list[str]:
+    return sorted(
+        label
+        for label in all_labels
+        if any(label.startswith(prefix) for prefix in ADDRESS_LABEL_PREFIXES)
+    )
+
+
+def _panel_field_labels(panel_title: str, panel_fields: list[str], all_labels: list[str]) -> list[str]:
+    if panel_title == "IDs, contact & addresses":
+        fields = list(panel_fields) + _address_labels(all_labels)
+        return sorted(dict.fromkeys(fields))
+    return [field for field in panel_fields if field in all_labels]
+
+
+def _legend_below(fig, axes, ncol: int = 3, fontsize: float = 8) -> None:
+    axis_list = list(axes) if hasattr(axes, "__iter__") and not isinstance(axes, plt.Axes) else [axes]
+    handles, labels = axis_list[0].get_legend_handles_labels()
+    if not handles:
+        return
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.02),
+        ncol=ncol,
+        fontsize=fontsize,
+    )
+    fig.subplots_adjust(bottom=0.1)
+
 
 def load_summary_frames(run_dir: Path) -> pd.DataFrame:
     frames = []
@@ -107,7 +150,6 @@ def _plot_metric_groups(
     ax.set_ylim(0, 1)
     ax.set_title(title)
     ax.grid(axis="y", alpha=0.5)
-    ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0))
 
 
 def plot_metrics(summary: pd.DataFrame, out_path: Path) -> None:
@@ -126,38 +168,54 @@ def plot_metrics(summary: pd.DataFrame, out_path: Path) -> None:
         METRIC_COLUMNS[4:],
         title=f"{BENCHMARK} metrics (2/2)",
     )
-    fig.subplots_adjust(right=0.72, hspace=0.35)
+    fig.subplots_adjust(hspace=0.35)
+    _legend_below(fig, axes, ncol=3, fontsize=7)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")
     plt.close(fig)
+
+
+def _plot_label_panel(
+    ax,
+    pivot: pd.DataFrame,
+    models: list[str],
+    field_labels: list[str],
+    title: str,
+) -> None:
+    if not field_labels:
+        ax.set_axis_off()
+        return
+    x = np.arange(len(field_labels))
+    width = 0.8 / max(len(models), 1)
+    for model_index, model_id in enumerate(models):
+        model_rows = pivot[pivot["model_id"] == model_id]
+        values = [
+            float(model_rows[model_rows["label"] == label]["f1"].mean())
+            if label in model_rows["label"].values
+            else 0.0
+            for label in field_labels
+        ]
+        offsets = x - 0.4 + width / 2 + model_index * width
+        display_name = DISPLAY_NAMES.get(model_id, model_id)
+        ax.bar(offsets, values, width=width, label=display_name)
+    ax.set_xticks(x)
+    ax.set_xticklabels(field_labels, rotation=35, ha="right", fontsize=7)
+    ax.set_ylim(0, 1)
+    ax.set_title(title)
+    ax.grid(axis="y", alpha=0.5)
 
 
 def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
     if per_label.empty:
         return
     pivot = per_label.groupby(["model_id", "label"])["f1"].mean().reset_index()
-    labels = sorted(pivot["label"].unique())
+    all_labels = sorted(pivot["label"].unique())
     models = sorted(pivot["model_id"].unique())
-    x = np.arange(len(labels))
-    width = 0.8 / max(len(models), 1)
-    fig, ax = plt.subplots(figsize=(14, 5))
-    for model_index, model_id in enumerate(models):
-        model_rows = pivot[pivot["model_id"] == model_id]
-        values = [
-            model_rows[model_rows["label"] == label]["f1"].mean()
-            if label in model_rows["label"].values
-            else 0.0
-            for label in labels
-        ]
-        offsets = x - 0.4 + width / 2 + model_index * width
-        display_name = DISPLAY_NAMES.get(model_id, model_id)
-        ax.bar(offsets, values, width=width, label=display_name)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=60, ha="right", fontsize=7)
-    ax.set_ylim(0, 1)
-    ax.set_title(f"{BENCHMARK} field F1 by label")
-    ax.grid(axis="y", alpha=0.5)
-    ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0))
-    fig.subplots_adjust(right=0.72)
+    fig, axes = plt.subplots(len(LABEL_PLOT_PANELS), 1, figsize=(12, 14))
+    for axis, (panel_title, panel_fields) in zip(axes, LABEL_PLOT_PANELS):
+        field_labels = _panel_field_labels(panel_title, panel_fields, all_labels)
+        _plot_label_panel(axis, pivot, models, field_labels, f"{BENCHMARK} field F1 — {panel_title}")
+    fig.subplots_adjust(hspace=0.55)
+    _legend_below(fig, axes, ncol=3, fontsize=8)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")
     plt.close(fig)
 
@@ -187,8 +245,13 @@ def plot_field_group_f1(per_label: pd.DataFrame, out_path: Path) -> None:
     ax.set_ylim(0, 1)
     ax.set_title(f"{BENCHMARK} macro field F1 by field group")
     ax.grid(axis="y", alpha=0.5)
-    ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1.0))
-    fig.subplots_adjust(right=0.75)
+    ax.legend(
+        fontsize=8,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=3,
+    )
+    fig.subplots_adjust(bottom=0.22)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")
     plt.close(fig)
 
