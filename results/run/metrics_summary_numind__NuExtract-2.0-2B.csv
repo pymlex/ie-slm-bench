@@ -1,0 +1,2 @@
+benchmark,model_id,strict_exact_match,field_precision,field_recall,field_f1,null_field_accuracy,hallucination_rate,schema_validity_rate,entity_f1
+ru-bank-ie,numind/NuExtract-2.0-2B,0.008152173913043478,0.3920935491702914,0.3920935491702914,0.3920935491702914,0.8120103473425904,0.05877720951077414,1.0,0.5607573765361231

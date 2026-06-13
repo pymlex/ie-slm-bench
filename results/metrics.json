@@ -1,0 +1,40 @@
+{
+  "summary": [
+    {
+      "benchmark": "ru-bank-ie",
+      "model_id": "Qwen/Qwen3-1.7B",
+      "strict_exact_match": 0.0,
+      "field_precision": 0.100961515649305,
+      "field_recall": 0.100961515649305,
+      "field_f1": 0.100961515649305,
+      "null_field_accuracy": 0.5909745198932639,
+      "hallucination_rate": 0.0625116461843776,
+      "schema_validity_rate": 0.7010869565217391,
+      "entity_f1": 0.1736989638482706
+    },
+    {
+      "benchmark": "ru-bank-ie",
+      "model_id": "numind/NuExtract-2.0-2B",
+      "strict_exact_match": 0.0081521739130434,
+      "field_precision": 0.3920935491702914,
+      "field_recall": 0.3920935491702914,
+      "field_f1": 0.3920935491702914,
+      "null_field_accuracy": 0.8120103473425904,
+      "hallucination_rate": 0.0587772095107741,
+      "schema_validity_rate": 1.0,
+      "entity_f1": 0.5607573765361231
+    },
+    {
+      "benchmark": "ru-bank-ie",
+      "model_id": "LiquidAI/LFM2-1.2B-Extract",
+      "strict_exact_match": 0.0,
+      "field_precision": 0.0566869133955617,
+      "field_recall": 0.0566869133955617,
+      "field_f1": 0.0566869133955617,
+      "null_field_accuracy": 0.5642171415189524,
+      "hallucination_rate": 0.0738560646137541,
+      "schema_validity_rate": 1.0,
+      "entity_f1": 0.1189771888886092
+    }
+  ]
+}

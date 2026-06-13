@@ -1,0 +1,2 @@
+benchmark,model_id,strict_exact_match,field_precision,field_recall,field_f1,null_field_accuracy,hallucination_rate,schema_validity_rate,entity_f1
+ru-bank-ie,LiquidAI/LFM2-1.2B-Extract,0.0,0.05668691339556173,0.05668691339556173,0.05668691339556173,0.5642171415189524,0.07385606461375419,1.0,0.11897718888860921

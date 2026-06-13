@@ -1,0 +1,2 @@
+benchmark,model_id,strict_exact_match,field_precision,field_recall,field_f1,null_field_accuracy,hallucination_rate,schema_validity_rate,entity_f1
+ru-bank-ie,Qwen/Qwen3-1.7B,0.0,0.10096151564930508,0.10096151564930508,0.10096151564930508,0.5909745198932639,0.06251164618437766,0.7010869565217391,0.17369896384827063
