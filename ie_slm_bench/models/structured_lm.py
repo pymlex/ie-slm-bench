@@ -4,6 +4,7 @@ import json
 import time
 from pathlib import Path
 
+import outlines
 import pandas as pd
 import torch
 from tqdm.auto import tqdm
@@ -11,6 +12,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from ie_slm_bench.config import BENCHMARK, LOAD_IN_4BIT, MAX_INPUT_CHARS, MAX_INPUT_TOKENS, SAVE_EVERY_N
 from ie_slm_bench.prompts import SYSTEM_PROMPT, build_user_prompt, output_schema
+from schemas.bank_client import BankClientExtraction
 
 
 class StructuredLmBackend:
@@ -23,8 +25,9 @@ class StructuredLmBackend:
         self.model_id = model_id
         self.batch_size = batch_size
         self.backend_kind = backend_kind
-        self.model = None
+        self.hf_model = None
         self.tokenizer = None
+        self.outlines_model = None
 
     def _quantization_config(self) -> BitsAndBytesConfig | None:
         if not LOAD_IN_4BIT:
@@ -40,6 +43,7 @@ class StructuredLmBackend:
         model_kwargs = {
             "device_map": "auto",
             "attn_implementation": "sdpa",
+            "trust_remote_code": True,
         }
         if quantization_config is not None:
             model_kwargs["quantization_config"] = quantization_config
@@ -50,32 +54,19 @@ class StructuredLmBackend:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
-            trust_remote_code=True,
-            **model_kwargs,
-        )
+        self.hf_model = AutoModelForCausalLM.from_pretrained(self.model_id, **model_kwargs)
+        self.outlines_model = outlines.from_transformers(self.hf_model, self.tokenizer)
 
     def unload(self) -> None:
-        del self.model
+        del self.hf_model
         del self.tokenizer
-        self.model = None
+        del self.outlines_model
+        self.hf_model = None
         self.tokenizer = None
+        self.outlines_model = None
         torch.cuda.empty_cache()
 
     def _format_prompt(self, text: str) -> str:
-        if self.backend_kind == "nuextract":
-            model_cls = output_schema()
-            template = {
-                "text": text,
-                "schema": json.loads(model_cls.model_json_schema()),
-            }
-            return (
-                "# Template:\n"
-                f"{json.dumps(template, ensure_ascii=False)}\n"
-                "# Output:"
-            )
-
         user_prompt = build_user_prompt(text, MAX_INPUT_CHARS)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -85,35 +76,13 @@ class StructuredLmBackend:
             "tokenize": False,
             "add_generation_prompt": True,
         }
-        if self.backend_kind in {"causal", "lfm"} and "qwen3" in self.model_id.lower():
+        if self.backend_kind in {"causal", "lfm", "nuextract"} and "qwen3" in self.model_id.lower():
             template_kwargs["enable_thinking"] = False
         return self.tokenizer.apply_chat_template(messages, **template_kwargs)
 
-    def _generate_batch(self, prompts: list[str], max_new_tokens: int) -> list[str]:
-        inputs = self.tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=MAX_INPUT_TOKENS,
-        ).to(self.model.device)
-        input_lengths = inputs["attention_mask"].sum(dim=1).tolist()
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            pad_token_id=self.tokenizer.pad_token_id,
-            use_cache=True,
-        )
-        decoded = []
-        for index, input_length in enumerate(input_lengths):
-            decoded.append(
-                self.tokenizer.decode(
-                    outputs[index][int(input_length):],
-                    skip_special_tokens=True,
-                )
-            )
-        return decoded
+    def _generate_one(self, prompt: str, max_new_tokens: int) -> str:
+        result = self.outlines_model(prompt, BankClientExtraction, max_new_tokens=max_new_tokens)
+        return result.model_dump_json(by_alias=True, exclude_none=True)
 
     def predict_frame(
         self,
@@ -135,7 +104,7 @@ class StructuredLmBackend:
                 f"skipped {len(done_ids)} completed docs, batch_size={self.batch_size}"
             )
         else:
-            print(f"{self.model_id}:{BENCHMARK}, batch_size={self.batch_size}")
+            print(f"{self.model_id}:{BENCHMARK}, batch_size={self.batch_size}, backend=outlines")
 
         batch_starts = range(0, len(pending), self.batch_size)
         for batch_index, batch_start in enumerate(
@@ -143,8 +112,10 @@ class StructuredLmBackend:
         ):
             batch_rows = pending.iloc[batch_start : batch_start + self.batch_size]
             started = time.time()
-            prompts = [self._format_prompt(row["text"]) for _, row in batch_rows.iterrows()]
-            pred_raw_list = self._generate_batch(prompts, max_new_tokens=max_new_tokens)
+            pred_raw_list = []
+            for _, row in batch_rows.iterrows():
+                prompt = self._format_prompt(row["text"])
+                pred_raw_list.append(self._generate_one(prompt, max_new_tokens=max_new_tokens))
             latency = time.time() - started
             per_item_latency = latency / len(batch_rows)
             for row_index, (_, row) in enumerate(batch_rows.iterrows()):

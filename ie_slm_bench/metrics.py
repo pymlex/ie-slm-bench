@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 
 import numpy as np
@@ -9,16 +8,39 @@ from pydantic import BaseModel, ValidationError
 
 from ie_slm_bench.config import BENCHMARK
 from ie_slm_bench.parsers import extract_json_object
-from schemas.runne import RunneExtraction
+from schemas.bank_client import BankClientExtraction
 
 
 def safe_model_filename(model_id: str) -> str:
     return model_id.replace("/", "__")
 
 
-def load_extraction(raw_json: str, model_cls: type[BaseModel]) -> BaseModel:
-    payload = json.loads(raw_json)
-    return model_cls.model_validate(payload)
+def normalize_value(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
+            return None
+        return stripped
+    return str(value)
+
+
+def flatten_gold(model: BankClientExtraction) -> dict[str, str | None]:
+    raw = model.model_dump(by_alias=True, exclude_none=False)
+    flat: dict[str, str | None] = {}
+
+    def walk(prefix: str, value) -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                next_prefix = f"{prefix}.{key}" if prefix else key
+                walk(next_prefix, nested)
+            return
+        flat[prefix] = normalize_value(value)
+
+    walk("", raw)
+    flat.pop("", None)
+    return flat
 
 
 def try_validate_output(
@@ -33,22 +55,25 @@ def try_validate_output(
     return parsed, True
 
 
-def entity_key(entity) -> tuple:
-    return (entity.start, entity.end, entity.type)
+def strict_exact_match(gold: BankClientExtraction, pred: BankClientExtraction) -> bool:
+    gold_flat = flatten_gold(gold)
+    pred_flat = flatten_gold(pred)
+    keys = sorted(set(gold_flat) | set(pred_flat))
+    return all(gold_flat.get(key) == pred_flat.get(key) for key in keys)
 
 
-def strict_exact_match(gold: BaseModel, pred: BaseModel) -> bool:
-    gold_obj = RunneExtraction.model_validate(gold.model_dump())
-    pred_obj = RunneExtraction.model_validate(pred.model_dump())
-    gold_entities = sorted(entity_key(item) for item in gold_obj.entities)
-    pred_entities = sorted(entity_key(item) for item in pred_obj.entities)
-    return gold_entities == pred_entities
-
-
-def entity_level_sets(gold: BaseModel, pred: BaseModel) -> tuple[set, set]:
-    gold_set = {entity_key(item) for item in gold.entities}
-    pred_set = {entity_key(item) for item in pred.entities}
-    return gold_set, pred_set
+def field_sets(gold: BankClientExtraction, pred: BankClientExtraction) -> tuple[dict[str, set], dict[str, set]]:
+    gold_flat = flatten_gold(gold)
+    pred_flat = flatten_gold(pred)
+    gold_by_label: dict[str, set] = defaultdict(set)
+    pred_by_label: dict[str, set] = defaultdict(set)
+    for key, value in gold_flat.items():
+        if value is not None:
+            gold_by_label[key].add(value)
+    for key, value in pred_flat.items():
+        if value is not None:
+            pred_by_label[key].add(value)
+    return gold_by_label, pred_by_label
 
 
 def prf1(gold_set: set, pred_set: set) -> tuple[float, float, float]:
@@ -61,36 +86,28 @@ def prf1(gold_set: set, pred_set: set) -> tuple[float, float, float]:
     return precision, recall, f1
 
 
-def null_field_records(gold: BaseModel, pred: BaseModel) -> list[tuple[str, bool, bool]]:
-    gold_obj = RunneExtraction.model_validate(gold.model_dump())
-    pred_obj = RunneExtraction.model_validate(pred.model_dump())
-    gold_empty = len(gold_obj.entities) == 0
-    pred_empty = len(pred_obj.entities) == 0
-    return [("entities", gold_empty, pred_empty)]
-
-
-def null_field_metrics(gold: BaseModel, pred: BaseModel) -> tuple[float, float]:
-    records = null_field_records(gold, pred)
-    gold_null_flags = np.array([item[1] for item in records], dtype=bool)
-    pred_null_flags = np.array([item[2] for item in records], dtype=bool)
+def null_field_metrics(gold: BankClientExtraction, pred: BankClientExtraction) -> tuple[float, float]:
+    gold_flat = flatten_gold(gold)
+    pred_flat = flatten_gold(pred)
+    keys = sorted(set(gold_flat) | set(pred_flat))
+    gold_null_flags = np.array([gold_flat.get(key) is None for key in keys], dtype=bool)
+    pred_null_flags = np.array([pred_flat.get(key) is None for key in keys], dtype=bool)
     null_accuracy = float(np.mean(gold_null_flags == pred_null_flags))
     hallucination_mask = gold_null_flags & ~pred_null_flags
     hallucination_rate = float(np.mean(hallucination_mask))
     return null_accuracy, hallucination_rate
 
 
-def label_value_sets(gold: BaseModel, pred: BaseModel) -> tuple[dict[str, set], dict[str, set]]:
-    gold_by_label: dict[str, set] = defaultdict(set)
-    pred_by_label: dict[str, set] = defaultdict(set)
-    for item in gold.entities:
-        gold_by_label[f"entity:{item.type}"].add(entity_key(item))
-    for item in pred.entities:
-        pred_by_label[f"entity:{item.type}"].add(entity_key(item))
-    return gold_by_label, pred_by_label
+def entity_level_sets(gold: BankClientExtraction, pred: BankClientExtraction) -> tuple[set, set]:
+    gold_flat = flatten_gold(gold)
+    pred_flat = flatten_gold(pred)
+    gold_set = {(key, value) for key, value in gold_flat.items() if value is not None}
+    pred_set = {(key, value) for key, value in pred_flat.items() if value is not None}
+    return gold_set, pred_set
 
 
-def per_label_prf1(gold: BaseModel, pred: BaseModel) -> pd.DataFrame:
-    gold_by_label, pred_by_label = label_value_sets(gold, pred)
+def per_label_prf1(gold: BankClientExtraction, pred: BankClientExtraction) -> pd.DataFrame:
+    gold_by_label, pred_by_label = field_sets(gold, pred)
     labels = sorted(set(gold_by_label) | set(pred_by_label))
     rows = []
     for label in labels:
@@ -117,10 +134,10 @@ def evaluate_predictions(
     per_example_rows = []
     per_label_rows = []
     for _, row in frame.iterrows():
-        gold = load_extraction(row["gold_json"], model_cls)
+        gold = BankClientExtraction.model_validate_json(row["gold_json"])
         pred, schema_valid = try_validate_output(row["pred_raw"], model_cls)
         if pred is None:
-            pred = model_cls()
+            pred = BankClientExtraction()
         gold_set, pred_set = entity_level_sets(gold, pred)
         entity_precision, entity_recall, entity_f1 = prf1(gold_set, pred_set)
         null_accuracy, hallucination_rate = null_field_metrics(gold, pred)

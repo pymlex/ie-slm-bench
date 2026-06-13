@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from schemas.runne import RunneExtraction
+import json
+
+from schemas.bank_client import BankClientExtraction
 
 
 SYSTEM_PROMPT = (
-    "Ты извлекаешь структурированную информацию из русского текста. "
-    "Возвращай только JSON, строго соответствующий схеме. "
-    "Если поле отсутствует в тексте, оставь пустой список или null. "
+    "Ты извлекаешь структурированные данные клиента банка из русского текста. "
+    "Верни JSON строго по схеме. "
+    "Если поле отсутствует в тексте, оставь null. "
     "Не выдумывай значения."
 )
 
-RUNNE_SCHEMA_HINT = '{"entities":[{"start":0,"end":7,"type":"PERSON"}]}'
+SCHEMA_HINT = (
+    '{"Фамилия":"Иванов","Имя":"Иван","Пол":"м","ИНН":"7707083893",'
+    '"Адрес регистрации":{"город":"Москва","улица":"Тверская","дом":"1"}}'
+)
 
 
 def truncate_text(text: str, max_chars: int) -> str:
@@ -22,11 +27,11 @@ def truncate_text(text: str, max_chars: int) -> str:
 def build_user_prompt(text: str, max_chars: int) -> str:
     clipped = truncate_text(text, max_chars)
     return (
-        "Извлеки структурированную информацию из текста.\n\n"
-        f"JSON schema example:\n{RUNNE_SCHEMA_HINT}\n\n"
+        "Извлеки данные клиента банка из текста.\n\n"
+        f"JSON schema example:\n{SCHEMA_HINT}\n\n"
         f"Текст:\n{clipped}"
     )
 
 
-def output_schema() -> type[RunneExtraction]:
-    return RunneExtraction
+def output_schema() -> type[BankClientExtraction]:
+    return BankClientExtraction

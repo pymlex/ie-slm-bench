@@ -72,13 +72,13 @@ def plot_metrics(summary: pd.DataFrame, out_path: Path) -> None:
         axes[0],
         summary,
         METRIC_COLUMNS[:4],
-        title=f"{BENCHMARK.upper()} metrics (1/2)",
+        title=f"{BENCHMARK} metrics (1/2)",
     )
     _plot_metric_groups(
         axes[1],
         summary,
         METRIC_COLUMNS[4:],
-        title=f"{BENCHMARK.upper()} metrics (2/2)",
+        title=f"{BENCHMARK} metrics (2/2)",
     )
     fig.subplots_adjust(right=0.72, hspace=0.35)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")
@@ -107,7 +107,7 @@ def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=60, ha="right", fontsize=7)
     ax.set_ylim(0, 1)
-    ax.set_title(f"{BENCHMARK.upper()} field F1 by label")
+    ax.set_title(f"{BENCHMARK} field F1 by label")
     ax.grid(axis="y", alpha=0.5)
     ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     fig.subplots_adjust(right=0.72)
@@ -121,11 +121,11 @@ def generate_all_plots(run_dir: Path, assets_dir: Path) -> pd.DataFrame:
     if summary.empty:
         return summary
     summary.to_csv(assets_dir / "summary.csv", index=False)
-    plot_metrics(summary, assets_dir / "runne_metrics.png")
+    plot_metrics(summary, assets_dir / "ru_bank_ie_metrics.png")
     per_label_frames = []
     for path in run_dir.glob("metrics_label_*.csv"):
         per_label_frames.append(pd.read_csv(path))
     if per_label_frames:
         per_label = pd.concat(per_label_frames, ignore_index=True)
-        plot_field_f1_by_label(per_label, assets_dir / "runne_field_f1_by_label.png")
+        plot_field_f1_by_label(per_label, assets_dir / "ru_bank_ie_field_f1_by_label.png")
     return summary

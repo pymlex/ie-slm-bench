@@ -1,7 +1,8 @@
-from schemas.runne import RunneEntity, RunneExtraction
+from schemas.bank_client import Address, BankClientExtraction, WorkExperience
 
 
 __all__ = [
-    "RunneEntity",
-    "RunneExtraction",
+    "Address",
+    "BankClientExtraction",
+    "WorkExperience",
 ]
