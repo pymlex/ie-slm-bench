@@ -84,7 +84,7 @@ ie-slm-bench/
 
 ### ru-bank-ie
 
-Source: [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Synthetic Russian bank client messages paired with gold JSON annotations. The evaluation split contains coverage-valid pairs only. Current size $N=369$.
+Source: [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Synthetic Russian bank client messages paired with gold JSON annotations. The evaluation split contains coverage-valid pairs only. Current size $N=368$.
 
 Pydantic schema: `schemas/bank_client.py` with fixed Russian field aliases. Nested types: `Address`, `WorkExperience`.
 
@@ -118,8 +118,8 @@ Gold annotation example:
 Generation runs on Colab with `Qwen/Qwen3.5-4B` and Outlines.
 
 1. **Stage 1** — batched Outlines generation of 500 independent `BankClientExtraction` JSON objects. Each sample draws a random keep ratio in $[0.2, 0.8]$ over all fields. Batching is for throughput only: prompts differ by diversity key, region, job, batch slot and used surnames.
-2. **Stage 2** — batched generation of chat-style client messages from each gold JSON. Null fields are omitted or deferred with phrases such as «укажу позже».
-3. **Stage 3** — batched Qwen coverage check into `validation_json` with `all_present`, `missing_fields`, `justification`. `test.jsonl` keeps only rows with `all_present=true`.
+2. **Stage 2** — batched generation of chat-style client messages from each gold JSON. Model output is split into `reasoning` and `text`.
+3. **Stage 3** — batched Qwen coverage check on `text` only, stored in `validation_json`. `test.jsonl` keeps rows with `all_present=true` and non-empty `text`.
 
 ```bash
 bash scripts/generate_dataset.sh --n 500 --out-dir data/ru-bank-ie
@@ -135,7 +135,7 @@ $$
 \mathcal{I} = \mathrm{sort}\big(\mathrm{choice}(\{1,\ldots,N\},\,5000,\,\mathrm{seed}{=}42)\big)
 $$
 
-Current size: ru-bank-ie $N=369$ coverage-valid pairs from 500 generated stage-3 rows.
+Current size: ru-bank-ie $N=368$ coverage-valid pairs from 500 generated stage-3 rows.
 
 ## Metrics
 

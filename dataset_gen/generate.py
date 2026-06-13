@@ -12,6 +12,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from dataset_gen.finalize import finalize_dataset, validated_row
+from dataset_gen.text_split import split_reasoning_and_text
 from dataset_gen.llm import GeneratorBackend
 from dataset_gen.masks import build_gold_spec
 from ie_slm_bench.config import DATASET_SIZE, DATA_DIR, GEN_BATCH_SIZE, SEED
@@ -114,10 +115,12 @@ def main() -> None:
             batch = pending_gold[batch_start : batch_start + args.batch_size]
             golds = [BankClientExtraction.model_validate_json(row["gold_json"]) for row in batch]
             texts = backend.generate_text_batch(golds)
-            for row, text in zip(batch, texts):
+            for row, raw_text in zip(batch, texts):
+                reasoning, text = split_reasoning_and_text(raw_text)
                 pair_rows.append(
                     {
                         "id": row["id"],
+                        "reasoning": reasoning,
                         "text": text,
                         "gold_json": row["gold_json"],
                     }

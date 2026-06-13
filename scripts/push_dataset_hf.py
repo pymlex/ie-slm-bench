@@ -35,7 +35,8 @@ and a separate `validation_json` coverage justification. Fields may be `null` wh
 ## Columns
 
 - `id` — sample identifier
-- `text` — stage-2 client message
+- `reasoning` — model planning before the client message
+- `text` — client message used for evaluation
 - `gold_json` — gold `BankClientExtraction` JSON
 - `validation_json` — stage-3 coverage check with `all_present`, `missing_fields`, `justification`
 

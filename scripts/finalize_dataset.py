@@ -8,7 +8,7 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 from dataset_gen.finalize import finalize_dataset
-from ie_slm_bench.config import DATASET_REPO, DATA_DIR
+from ie_slm_bench.config import DATASET_REPO, DATA_DIR, GEN_BATCH_SIZE
 
 
 STAGE_FILES = [
@@ -38,10 +38,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
     parser.add_argument("--repo-id", type=str, default=DATASET_REPO)
+    parser.add_argument("--batch-size", type=int, default=GEN_BATCH_SIZE)
     parser.add_argument(
         "--download-hf",
         action="store_true",
         help="Download missing stage files from Hugging Face before finalising.",
+    )
+    parser.add_argument(
+        "--recheck-coverage",
+        action="store_true",
+        help="Re-run stage-3 coverage on split client text with Qwen3.5-4B.",
     )
     return parser.parse_args()
 
@@ -51,7 +57,11 @@ def main() -> None:
     data_dir = args.data_dir
     if args.download_hf:
         download_hf_files(data_dir, args.repo_id)
-    stage3_count, test_count = finalize_dataset(data_dir)
+    stage3_count, test_count = finalize_dataset(
+        data_dir,
+        recheck_coverage=args.recheck_coverage,
+        batch_size=args.batch_size,
+    )
     print(f"stage3_validated.jsonl: {stage3_count} rows")
     print(f"test.jsonl: {test_count} coverage-valid rows")
 
