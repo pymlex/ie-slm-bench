@@ -173,7 +173,7 @@ def build_prefill(
     if field_keep["passport_department_code"]:
         prefill["passport_department_code"] = random_department_code(rng)
     if field_keep["inn"]:
-        prefill["inn"] = int(random_inn(rng))
+        prefill["inn"] = random_inn(rng)
     if field_keep["snils"]:
         prefill["snils"] = random_snils(rng)
     if field_keep["mobile_phone"]:

@@ -94,7 +94,7 @@ Pydantic schema: `schemas/bank_client.py` with fixed Russian field aliases. Nest
 | Дата рождения, Год рождения, Место рождения | `str/int \| null` |
 | Гражданство, Пол | `str \| null` |
 | Серия и номер паспорта, Кем выдан паспорт, Дата выдачи, Код подразделения | `str \| null` |
-| ИНН | `int \| null` |
+| ИНН | `str \| null` |
 | СНИЛС | `str \| null` |
 | Адрес регистрации, Адрес фактического проживания | `Address \| null` |
 | Номер мобильного телефона, Адрес электронной почты | `str \| null` |

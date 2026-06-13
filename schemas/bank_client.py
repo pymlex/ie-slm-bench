@@ -35,7 +35,7 @@ class BankClientExtraction(BaseModel):
     passport_issued_by: str | None = Field(None, alias="Кем выдан паспорт", max_length=240)
     passport_issue_date: str | None = Field(None, alias="Дата выдачи паспорта", max_length=16)
     passport_department_code: str | None = Field(None, alias="Код подразделения", max_length=16)
-    inn: int | None = Field(None, alias="ИНН", ge=0, le=999999999999)
+    inn: str | None = Field(None, alias="ИНН", max_length=12)
     snils: str | None = Field(None, alias="СНИЛС", max_length=14)
     registration_address: Address | None = Field(None, alias="Адрес регистрации")
     actual_address: Address | None = Field(None, alias="Адрес фактического проживания")
@@ -51,9 +51,22 @@ class BankClientExtraction(BaseModel):
     car: str | None = Field(None, alias="Наличие автомобиля", max_length=80)
     loans_count: int | None = Field(None, alias="Наличие кредитов/займов", ge=0, le=50)
 
-    @field_validator("inn", "monthly_income", mode="before")
+    @field_validator("inn", mode="before")
     @classmethod
-    def coerce_int_fields(cls, value: object) -> object:
+    def coerce_inn(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return str(value)
+        stripped = str(value).strip()
+        if stripped == "":
+            return None
+        digits = "".join(char for char in stripped if char.isdigit())
+        return digits or None
+
+    @field_validator("monthly_income", mode="before")
+    @classmethod
+    def coerce_monthly_income(cls, value: object) -> object:
         if value is None:
             return None
         if isinstance(value, str):

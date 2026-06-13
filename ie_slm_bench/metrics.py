@@ -7,6 +7,7 @@ import pandas as pd
 from pydantic import BaseModel, ValidationError
 
 from ie_slm_bench.config import BENCHMARK
+from ie_slm_bench.normalize import normalize_field_value
 from ie_slm_bench.parsers import extract_json_object
 from schemas.bank_client import BankClientExtraction
 
@@ -15,32 +16,45 @@ def safe_model_filename(model_id: str) -> str:
     return model_id.replace("/", "__")
 
 
-def normalize_value(value) -> str | None:
+def normalize_value(path: str, value: object) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
         stripped = value.strip()
         if stripped == "":
             return None
-        return stripped
-    return str(value)
+        return normalize_field_value(path, stripped)
+    return normalize_field_value(path, str(value))
 
 
 def flatten_gold(model: BankClientExtraction) -> dict[str, str | None]:
     raw = model.model_dump(by_alias=True, exclude_none=False)
     flat: dict[str, str | None] = {}
 
-    def walk(prefix: str, value) -> None:
+    def walk(prefix: str, value: object) -> None:
         if isinstance(value, dict):
             for key, nested in value.items():
                 next_prefix = f"{prefix}.{key}" if prefix else key
                 walk(next_prefix, nested)
             return
-        flat[prefix] = normalize_value(value)
+        flat[prefix] = normalize_value(prefix, value)
 
     walk("", raw)
     flat.pop("", None)
     return flat
+
+
+def parse_prediction(
+    raw_text: str,
+    model_cls: type[BaseModel],
+) -> tuple[BaseModel | None, bool]:
+    stripped = raw_text.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        try:
+            return model_cls.model_validate_json(stripped), True
+        except ValidationError:
+            pass
+    return try_validate_output(raw_text, model_cls)
 
 
 def try_validate_output(
@@ -135,7 +149,7 @@ def evaluate_predictions(
     per_label_rows = []
     for _, row in frame.iterrows():
         gold = BankClientExtraction.model_validate_json(row["gold_json"])
-        pred, schema_valid = try_validate_output(row["pred_raw"], model_cls)
+        pred, schema_valid = parse_prediction(row["pred_raw"], model_cls)
         if pred is None:
             pred = BankClientExtraction()
         gold_set, pred_set = entity_level_sets(gold, pred)
