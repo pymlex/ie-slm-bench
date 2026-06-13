@@ -12,7 +12,7 @@ configure_torch_runtime()
 import torch
 from pydantic import ValidationError
 from tqdm.auto import tqdm
-from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
+from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
 
 from ie_slm_bench.config import (
     BENCHMARK,
@@ -32,7 +32,7 @@ class NuExtractBackend:
         self.model_id = model_id
         self.batch_size = batch_size
         self.hf_model = None
-        self.processor = None
+        self.tokenizer = None
 
     def _quantization_config(self) -> BitsAndBytesConfig | None:
         if not LOAD_IN_4BIT:
@@ -55,12 +55,13 @@ class NuExtractBackend:
         else:
             model_kwargs["dtype"] = torch.bfloat16
 
-        self.processor = AutoProcessor.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_id,
             trust_remote_code=True,
             padding_side="left",
-            use_fast=True,
         )
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         self.hf_model = AutoModelForImageTextToText.from_pretrained(
             self.model_id,
             **model_kwargs,
@@ -68,9 +69,9 @@ class NuExtractBackend:
 
     def unload(self) -> None:
         del self.hf_model
-        del self.processor
+        del self.tokenizer
         self.hf_model = None
-        self.processor = None
+        self.tokenizer = None
         torch.cuda.empty_cache()
 
     def _format_batch_texts(self, texts: list[str]) -> list[str]:
@@ -79,7 +80,7 @@ class NuExtractBackend:
             for text in texts
         ]
         return [
-            self.processor.tokenizer.apply_chat_template(
+            self.tokenizer.apply_chat_template(
                 messages_batch[index],
                 template=BANK_CLIENT_NUEXTRACT_TEMPLATE,
                 tokenize=False,
@@ -88,57 +89,54 @@ class NuExtractBackend:
             for index in range(len(messages_batch))
         ]
 
-    def _parse_output(self, raw_text: str) -> BankClientExtraction:
-        payload = extract_json_object(raw_text)
-        return BankClientExtraction.model_validate(payload)
-
-    def _generate_batch(self, texts: list[str], max_new_tokens: int) -> list[str]:
-        prompt_texts = self._format_batch_texts(texts)
-        inputs = self.processor(
-            text=prompt_texts,
-            images=None,
+    def _encode_batch(self, prompt_texts: list[str]) -> dict:
+        return self.tokenizer(
+            prompt_texts,
             padding=True,
             return_tensors="pt",
         ).to(self.hf_model.device)
 
+    def _parse_output(self, raw_text: str) -> BankClientExtraction:
+        payload = extract_json_object(raw_text)
+        return BankClientExtraction.model_validate(payload)
+
+    def _decode_batch(self, input_ids: torch.Tensor, generated_ids: torch.Tensor) -> list[str]:
+        trimmed_ids = [
+            out_ids[len(in_ids) :]
+            for in_ids, out_ids in zip(input_ids, generated_ids)
+        ]
+        return self.tokenizer.batch_decode(
+            trimmed_ids,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+
+    def _generate_batch(self, texts: list[str], max_new_tokens: int) -> list[str]:
+        prompt_texts = self._format_batch_texts(texts)
+        inputs = self._encode_batch(prompt_texts)
         generated_ids = self.hf_model.generate(
             **inputs,
             do_sample=False,
             num_beams=1,
             max_new_tokens=max_new_tokens,
         )
-        trimmed_ids = [
-            out_ids[len(in_ids) :]
-            for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        output_texts = self.processor.batch_decode(
-            trimmed_ids,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )
+        output_texts = self._decode_batch(inputs.input_ids, generated_ids)
 
         predictions: list[str] = []
         for index, raw_text in enumerate(output_texts):
             try:
                 parsed = self._parse_output(raw_text)
             except (ValidationError, json.JSONDecodeError):
-                single_inputs = self.processor(
-                    text=[prompt_texts[index]],
-                    images=None,
-                    padding=True,
-                    return_tensors="pt",
-                ).to(self.hf_model.device)
+                single_inputs = self._encode_batch([prompt_texts[index]])
                 retry_ids = self.hf_model.generate(
                     **single_inputs,
                     do_sample=False,
                     num_beams=1,
                     max_new_tokens=INFER_RETRY_MAX_NEW_TOKENS,
                 )
-                retry_trimmed = retry_ids[0, single_inputs.input_ids.shape[1] :]
-                retry_text = self.processor.batch_decode(
-                    [retry_trimmed],
-                    skip_special_tokens=True,
-                    clean_up_tokenization_spaces=False,
+                retry_text = self._decode_batch(
+                    single_inputs.input_ids,
+                    retry_ids,
                 )[0]
                 try:
                     parsed = self._parse_output(retry_text)
