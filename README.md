@@ -60,7 +60,7 @@ ie-slm-bench/
 ├── schemas/
 │   └── bank_client.py
 ├── dataset_gen/
-│   ├── skeleton.py
+│   ├── masks.py
 │   ├── llm.py
 │   └── generate.py
 ├── scripts/
@@ -116,10 +116,9 @@ Gold annotation example:
 
 Generation runs on Colab with `Qwen/Qwen3.5-4B` and Outlines.
 
-1. **Stage 1** — deterministic randomisation of passport numbers, ИНН, СНИЛС, dates, phones, income, and field masks.
-2. **Stage 2** — LLM fills surnames, given names, patronymics, and addresses conditioned on gender.
-3. **Stage 3** — LLM writes a chat-style client message from each gold JSON. Null fields are omitted or deferred with phrases such as «укажу позже».
-4. **Stage 4** — LLM coverage check. If a non-null gold field is missing from the text, the message is regenerated.
+1. **Stage 1** — batched generation of 500 unique `BankClientExtraction` JSON objects with random field masks.
+2. **Stage 2** — batched generation of chat-style client messages from each gold JSON. Null fields are omitted or deferred with phrases such as «укажу позже».
+3. **Stage 3** — batched Qwen coverage check. If a non-null gold field is missing from the text, the message is regenerated.
 
 ```bash
 bash scripts/generate_dataset.sh --n 500 --out-dir data/ru-bank-ie

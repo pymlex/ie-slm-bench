@@ -40,10 +40,9 @@ Fixed Pydantic schema in `schemas/bank_client.py` with Russian field aliases.
 
 - `test.jsonl` — evaluation split
 - `test.csv` — same data in CSV
-- `stage1_skeletons.jsonl` — deterministic randomised fields
-- `stage2_gold.jsonl` — gold JSON after LLM person fill
-- `stage3_pairs.jsonl` — text prompts from gold JSON
-- `stage4_validated.jsonl` — coverage-checked pairs
+- `stage1_gold.jsonl` — gold JSON profiles
+- `stage2_pairs.jsonl` — text prompts from gold JSON
+- `stage3_validated.jsonl` — coverage-checked pairs
 
 ## Generation
 
