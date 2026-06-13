@@ -50,3 +50,21 @@ class BankClientExtraction(BaseModel):
     real_estate: str | None = Field(None, alias="Наличие недвижимости")
     car: str | None = Field(None, alias="Наличие автомобиля")
     loans_count: int | None = Field(None, alias="Наличие кредитов/займов")
+
+
+class GoldProfileFill(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    surname: str = Field(alias="Фамилия")
+    name: str = Field(alias="Имя")
+    patronymic: str | None = Field(None, alias="Отчество")
+    birth_place: str | None = Field(None, alias="Место рождения")
+    citizenship: str | None = Field(None, alias="Гражданство")
+    passport_issued_by: str | None = Field(None, alias="Кем выдан паспорт")
+    registration_address: Address | None = Field(None, alias="Адрес регистрации")
+    actual_address: Address | None = Field(None, alias="Адрес фактического проживания")
+    employer: str | None = Field(None, alias="Место работы")
+    job_title: str | None = Field(None, alias="Должность на работе")
+    marital_status: str | None = Field(None, alias="Семейное положение")
+    real_estate: str | None = Field(None, alias="Наличие недвижимости")
+    car: str | None = Field(None, alias="Наличие автомобиля")

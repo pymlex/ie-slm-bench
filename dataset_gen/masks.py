@@ -158,6 +158,7 @@ def build_gold_spec(
     field_keep = field_mask(rng, GOLD_FIELDS, fill_prob=0.72)
     field_keep["surname"] = True
     field_keep["name"] = True
+    field_keep["patronymic"] = True
     field_keep["gender"] = True
     prefill = build_prefill(rng, sample_id=sample_id, field_keep=field_keep)
     return {

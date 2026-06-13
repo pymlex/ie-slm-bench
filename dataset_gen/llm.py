@@ -18,7 +18,7 @@ from ie_slm_bench.config import (
     GENERATOR_MODEL,
 )
 from ie_slm_bench.parsers import parse_outlines_output
-from schemas.bank_client import BankClientExtraction
+from schemas.bank_client import BankClientExtraction, GoldProfileFill
 
 
 class CoverageCheck(BaseModel):
@@ -49,7 +49,7 @@ class GeneratorBackend:
             attn_implementation="sdpa",
         )
         self.outlines_model = outlines.from_transformers(self.hf_model, self.tokenizer)
-        self.gold_generator = outlines.Generator(self.outlines_model, BankClientExtraction)
+        self.gold_generator = outlines.Generator(self.outlines_model, GoldProfileFill)
         self.coverage_generator = outlines.Generator(self.outlines_model, CoverageCheck)
         print(
             f"Generator {self.model_id}, batch_size={self.batch_size}, "
@@ -101,8 +101,10 @@ class GeneratorBackend:
         return self._chat(
             (
                 "Ты создаёшь уникальный профиль клиента российского банка. "
-                "Верни полный JSON по схеме BankClientExtraction. "
-                "Все поля должны быть заполнены реалистичными значениями, кроме предзаполненных — их копируй без изменений."
+                "Верни JSON по схеме GoldProfileFill. "
+                "Поля Фамилия и Имя обязательны и не могут быть пустыми. "
+                "Остальные поля схемы заполни реалистичными уникальными значениями. "
+                "Предзаполненные поля копируй без изменений."
             ),
             (
                 f"Образец {spec['sample_id'] + 1} из {spec['total']}.\n"
@@ -144,8 +146,11 @@ class GeneratorBackend:
     def generate_gold_batch(self, specs: list[dict]) -> list[BankClientExtraction]:
         prompts = [self._gold_prompt(spec) for spec in specs]
         raw_list = self.gold_generator.batch(prompts, max_new_tokens=GEN_GOLD_MAX_NEW_TOKENS)
-        models = self._parse_batch(raw_list, BankClientExtraction)
-        merged = [merge_prefill(model, spec["prefill"]) for model, spec in zip(models, specs)]
+        profiles = self._parse_batch(raw_list, GoldProfileFill)
+        merged = [
+            merge_profile_and_prefill(profile, spec["prefill"])
+            for profile, spec in zip(profiles, specs)
+        ]
         return [apply_field_mask(model, spec["field_mask"]) for model, spec in zip(merged, specs)]
 
     def generate_text_batch(self, golds: list[BankClientExtraction]) -> list[str]:
@@ -171,8 +176,8 @@ class GeneratorBackend:
         return self._parse_batch(raw_list, CoverageCheck)
 
 
-def merge_prefill(model: BankClientExtraction, prefill: dict) -> BankClientExtraction:
-    values = model.model_dump()
+def merge_profile_and_prefill(profile: GoldProfileFill, prefill: dict) -> BankClientExtraction:
+    values = profile.model_dump()
     for key, value in prefill.items():
         if isinstance(value, BaseModel):
             values[key] = value.model_dump()
