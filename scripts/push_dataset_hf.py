@@ -58,7 +58,7 @@ python scripts/push_dataset_hf.py
 ```bibtex
 @misc{zyukov2026ru_bank_ie,
   title={ru-bank-ie: Russian Bank Client Information Extraction Benchmark},
-  author={Zyukov, Aleksandr and pymlex},
+  author={Zyukov, Alexey},
   year={2026},
   howpublished={\\url{https://huggingface.co/datasets/pymlex/ru-bank-ie}}
 }

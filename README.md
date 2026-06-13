@@ -282,7 +282,7 @@ GPL-3.0. See [LICENSE](LICENSE).
 
 ```bibtex
 @misc{ie_slm_bench,
-  author = {Alex Zyukov},
+  author = {Zyukov, Alexey},
   title = {IE SLM Benchmark: Structured Information Extraction from Russian Bank Client Text},
   year = {2026},
   publisher = {GitHub},
@@ -293,7 +293,7 @@ GPL-3.0. See [LICENSE](LICENSE).
 ```bibtex
 @misc{zyukov2026ru_bank_ie,
   title={ru-bank-ie: Russian Bank Client Information Extraction Benchmark},
-  author={Zyukov, Aleksandr and pymlex},
+  author={Zyukov, Alexey},
   year={2026},
   howpublished={\url{https://huggingface.co/datasets/pymlex/ru-bank-ie}}
 }
