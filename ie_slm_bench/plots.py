@@ -239,9 +239,9 @@ def _plot_label_panel(
     ax.set_xticks(x)
     tick_labels = [_field_tick_label(label) for label in field_labels]
     ax.set_xticklabels(tick_labels, rotation=30, ha="center", fontsize=7)
-    ax.tick_params(axis="x", pad=4)
+    ax.tick_params(axis="x", pad=2)
     ax.set_ylim(0, 1)
-    ax.set_title(title, fontsize=9, loc="left", pad=10)
+    ax.set_title(title, fontsize=9, loc="left", pad=4)
     ax.grid(axis="y", alpha=0.5)
 
 
@@ -254,9 +254,15 @@ def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
     panels = _build_label_plot_panels(all_labels)
     if not panels:
         return
-    panel_height = 4.2
-    fig, axes = plt.subplots(len(panels), 1, figsize=(12, panel_height * len(panels)))
+    panel_count = len(panels)
+    fig, axes = plt.subplots(
+        panel_count,
+        1,
+        figsize=(12, 2.5 * panel_count),
+        layout="constrained",
+    )
     axes = np.atleast_1d(axes)
+    fig.set_constrained_layout_pads(h_pad=0.06, hspace=0.04)
     for axis, (panel_title, field_labels) in zip(axes, panels):
         _plot_label_panel(
             axis,
@@ -265,9 +271,16 @@ def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
             field_labels,
             panel_title,
         )
-    fig.subplots_adjust(hspace=0.95, top=0.98, bottom=0.18)
-    _legend_below(fig, axes, ncol=3, fontsize=8, bottom_margin=None)
-    fig.savefig(out_path, dpi=180)
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        legend_labels,
+        loc="outside lower center",
+        ncol=3,
+        fontsize=8,
+        borderaxespad=0.3,
+    )
+    fig.savefig(out_path, dpi=180, bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
 
 
