@@ -1,6 +1,6 @@
 # IE SLM benchmark
 
-End-to-end benchmark for structured information extraction from Russian bank client text with small language models up to 2B parameters. The evaluation corpus is [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Each model receives raw client text and must return a Pydantic-validated JSON object via Outlines constrained decoding. Missing fields must remain `null`. Evaluation metrics are published separately at [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval).
+End-to-end benchmark for structured information extraction from Russian bank client text with small language models up to 2B parameters. The evaluation corpus is [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Models receive raw client text and must return a Pydantic-validated JSON object via Outlines constrained decoding. Missing fields must remain `null`. Evaluation metrics are published separately at [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval).
 
 ## Models
 
@@ -309,10 +309,6 @@ Macro field F1 by semantic group:
   <img src="results/assets/ru_bank_ie_field_f1_by_label.png?v=3" alt="ru-bank-ie field F1 by label" width="720" />
 </p>
 
-## License
-
-GPL-3.0. See [LICENSE](LICENSE).
-
 ## References
 
 ```bibtex
@@ -322,15 +318,6 @@ GPL-3.0. See [LICENSE](LICENSE).
   year = {2026},
   publisher = {GitHub},
   howpublished = {\url{https://github.com/pymlex/ie-slm-bench}},
-}
-```
-
-```bibtex
-@misc{zyukov2026ru_bank_ie,
-  title={ru-bank-ie: Russian Bank Client Information Extraction Benchmark},
-  author={Zyukov, Alexey},
-  year={2026},
-  howpublished={\url{https://huggingface.co/datasets/pymlex/ru-bank-ie}}
 }
 ```
 
