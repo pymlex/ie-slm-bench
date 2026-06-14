@@ -77,27 +77,52 @@ ADDRESS_LABEL_PREFIXES = (
     "Адрес фактического проживания.",
 )
 
-LABEL_PLOT_PANELS = [
-    ("Identity", FIELD_GROUPS["Identity"]),
-    ("Passport", FIELD_GROUPS["Passport"]),
-    ("IDs, contact & addresses", FIELD_GROUPS["IDs & contact"]),
-    ("Work & assets", FIELD_GROUPS["Work"] + FIELD_GROUPS["Assets & family"]),
-]
+ADDRESS_PANEL_TITLES = {
+    "Адрес регистрации.": "Адрес регистрации",
+    "Адрес фактического проживания.": "Адрес фактического проживания",
+}
+
+MAX_LABELS_PER_PANEL = 8
 
 
-def _address_labels(all_labels: list[str]) -> list[str]:
-    return sorted(
-        label
-        for label in all_labels
-        if any(label.startswith(prefix) for prefix in ADDRESS_LABEL_PREFIXES)
-    )
+def _split_fields(
+    title: str,
+    fields: list[str],
+    max_width: int = MAX_LABELS_PER_PANEL,
+) -> list[tuple[str, list[str]]]:
+    if not fields:
+        return []
+    if len(fields) <= max_width:
+        return [(title, fields)]
+    total_parts = (len(fields) + max_width - 1) // max_width
+    panels: list[tuple[str, list[str]]] = []
+    for part_index, start in enumerate(range(0, len(fields), max_width)):
+        chunk = fields[start:start + max_width]
+        part_title = f"{title} ({part_index + 1}/{total_parts})"
+        panels.append((part_title, chunk))
+    return panels
 
 
-def _panel_field_labels(panel_title: str, panel_fields: list[str], all_labels: list[str]) -> list[str]:
-    if panel_title == "IDs, contact & addresses":
-        fields = list(panel_fields) + _address_labels(all_labels)
-        return sorted(dict.fromkeys(fields))
-    return [field for field in panel_fields if field in all_labels]
+def _build_label_plot_panels(
+    all_labels: list[str],
+    max_width: int = MAX_LABELS_PER_PANEL,
+) -> list[tuple[str, list[str]]]:
+    panels: list[tuple[str, list[str]]] = []
+    covered: set[str] = set()
+    label_set = set(all_labels)
+    for group_name, fields in FIELD_GROUPS.items():
+        field_labels = [field for field in fields if field in label_set]
+        covered.update(field_labels)
+        panels.extend(_split_fields(group_name, field_labels, max_width))
+    for prefix in ADDRESS_LABEL_PREFIXES:
+        address_fields = sorted(label for label in all_labels if label.startswith(prefix))
+        covered.update(address_fields)
+        if address_fields:
+            title = ADDRESS_PANEL_TITLES.get(prefix, prefix.rstrip("."))
+            panels.extend(_split_fields(title, address_fields, max_width))
+    for label in sorted(label_set - covered):
+        panels.extend(_split_fields(label, [label], max_width))
+    return panels
 
 
 def _legend_below(fig, axes, ncol: int = 3, fontsize: float = 8) -> None:
@@ -210,10 +235,19 @@ def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
     pivot = per_label.groupby(["model_id", "label"])["f1"].mean().reset_index()
     all_labels = sorted(pivot["label"].unique())
     models = sorted(pivot["model_id"].unique())
-    fig, axes = plt.subplots(len(LABEL_PLOT_PANELS), 1, figsize=(12, 14))
-    for axis, (panel_title, panel_fields) in zip(axes, LABEL_PLOT_PANELS):
-        field_labels = _panel_field_labels(panel_title, panel_fields, all_labels)
-        _plot_label_panel(axis, pivot, models, field_labels, f"{BENCHMARK} field F1 — {panel_title}")
+    panels = _build_label_plot_panels(all_labels)
+    if not panels:
+        return
+    fig, axes = plt.subplots(len(panels), 1, figsize=(12, 3.2 * len(panels)))
+    axes = np.atleast_1d(axes)
+    for axis, (panel_title, field_labels) in zip(axes, panels):
+        _plot_label_panel(
+            axis,
+            pivot,
+            models,
+            field_labels,
+            f"{BENCHMARK} field F1 — {panel_title}",
+        )
     fig.subplots_adjust(hspace=0.55)
     _legend_below(fig, axes, ncol=3, fontsize=8)
     fig.savefig(out_path, dpi=180, bbox_inches="tight")

@@ -124,23 +124,12 @@ Generation runs on Colab with `Qwen/Qwen3.5-4B` and Outlines.
 
 1. **Stage 1** — batched Outlines generation of 500 independent `BankClientExtraction` JSON objects. Each sample draws a random keep ratio in $[0.2, 0.8]$ over all fields. Batching is for throughput only: prompts differ by diversity key, region, job, batch slot and used surnames.
 2. **Stage 2** — batched generation of chat-style client messages from each gold JSON. Model output is split into `reasoning` and `text`.
-3. **Stage 3** — batched Qwen coverage check on `text` only, stored in `validation_json`. `test.jsonl` keeps rows with `all_present=true` and non-empty `text`.
+3. **Stage 3** — batched Qwen coverage check on `text` only, stored in `validation_json`. `test.jsonl` keeps rows with `all_present=true` and non-empty `text`. Current evaluation split: $N=368$ from 500 stage-3 rows.
 
 ```bash
 bash scripts/generate_dataset.sh --n 500 --out-dir data/ru-bank-ie
 bash scripts/finalize_and_push_dataset.sh --data-dir data/ru-bank-ie
 ```
-
-## Sampling policy
-
-- if $N \leq 5000$, use the full dataset
-- if $N > 5000$, subsample exactly $5000$ documents with fixed seed $s=42$
-
-$$
-\mathcal{I} = \mathrm{sort}\big(\mathrm{choice}(\{1,\ldots,N\},\,5000,\,\mathrm{seed}{=}42)\big)
-$$
-
-Current size: ru-bank-ie $N=368$ coverage-valid pairs from 500 generated stage-3 rows.
 
 ## Metrics
 
@@ -221,7 +210,7 @@ bash scripts/install_colab.sh
 
 ### 2. Secrets
 
-Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GENERATOR_MODEL`, `IE_SLM_DATASET_REPO`, `IE_SLM_LM_EVAL_REPO`, `IE_SLM_DATA_DIR`, `IE_SLM_DATASET_SIZE`, `IE_SLM_GEN_BATCH_SIZE`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_BATCH_SIZE_QWEN3`, `IE_SLM_BATCH_SIZE_OLAVA`, `IE_SLM_BATCH_SIZE_TINY_PAL`.
+Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GENERATOR_MODEL`, `IE_SLM_DATASET_REPO`, `IE_SLM_LM_EVAL_REPO`, `IE_SLM_DATA_DIR`, `IE_SLM_GEN_BATCH_SIZE`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_BATCH_SIZE_QWEN3`, `IE_SLM_BATCH_SIZE_OLAVA`, `IE_SLM_BATCH_SIZE_TINY_PAL`.
 
 ```bash
 cp .env.example .env
@@ -319,10 +308,6 @@ Macro field F1 by semantic group:
 <p align="center">
   <img src="results/assets/ru_bank_ie_field_f1_by_label.png" alt="ru-bank-ie field F1 by label" width="720" />
 </p>
-
-## Plot layout
-
-Within one subplot at most four metric groups appear as clustered bars. One bar is one model. One group is one metric.
 
 ## License
 

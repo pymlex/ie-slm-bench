@@ -65,14 +65,18 @@ Fixed Pydantic schema in `schemas/bank_client.py` with Russian field aliases.
 
 ## Benchmark results
 
-Evaluation on $N=368$ coverage-valid pairs with three SLMs up to 2B parameters on NVIDIA RTX 5090.
+Evaluation on the full coverage-valid split ($N=368$) with three SLMs up to 2B parameters on NVIDIA RTX 5090.
 Metrics use normalised string comparison for phones, INN, passport codes, dates and case-folded text fields.
+The split is built from 500 stage-3 rows: only pairs with `all_present=true` and non-empty `text` are retained.
 
 {BENCHMARK_SECTION}
 
 ## Generation
 
 Dataset built with `Qwen/Qwen3.5-4B` and Outlines constrained decoding on Colab.
+Stage 1 generates 500 gold profiles with random field sparsity in $[0.2, 0.8]$.
+Stage 2 produces client messages split into `reasoning` and `text`.
+Stage 3 validates field coverage on `text` only.
 
 ```bash
 bash scripts/generate_dataset.sh --n 500
