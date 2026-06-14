@@ -219,4 +219,5 @@ __marimo__/
 
 data/ru-bank-ie/*
 !data/ru-bank-ie/.gitkeep
+results/hf-staging/
 results/lm-eval-upload/

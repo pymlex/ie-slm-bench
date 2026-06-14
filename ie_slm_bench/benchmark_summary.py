@@ -53,8 +53,8 @@ def load_analysis_bullets(results_root: Path) -> str:
         f"- NuExtract field-group F1: IDs & contact {_pct(groups['numind/NuExtract-2.0-2B']['IDs & contact'])}%, "
         f"work {_pct(groups['numind/NuExtract-2.0-2B']['Work'])}%, passport {_pct(groups['numind/NuExtract-2.0-2B']['Passport'])}%.",
         f"- Address sub-fields with index, country and region stay at 0% F1 for NuExtract when gold omits them from client text.",
-        f"- Full metrics and plots: [ie-slm-bench results](https://github.com/pymlex/ie-slm-bench/tree/main/results). "
-        f"LM-eval artefacts: [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval).",
+        f"- Metrics CSV and plots in this repository under `benchmark/` and `benchmark_assets/`. "
+        f"GitHub mirror: [ie-slm-bench results](https://github.com/pymlex/ie-slm-bench/tree/main/results).",
     ]
     return "\n".join(bullets)
 

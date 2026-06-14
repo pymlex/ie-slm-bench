@@ -1,6 +1,6 @@
 # IE SLM benchmark
 
-End-to-end benchmark for structured information extraction from Russian bank client text with small language models up to 2B parameters. The evaluation corpus is [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Models receive raw client text and must return a Pydantic-validated JSON object via Outlines constrained decoding. Missing fields must remain `null`. Evaluation metrics are published separately at [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval).
+End-to-end benchmark for structured information extraction from Russian bank client text with small language models up to 2B parameters. The evaluation corpus and benchmark metrics are published at [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie). Models receive raw client text and must return a Pydantic-validated JSON object via Outlines constrained decoding. Missing fields must remain `null`.
 
 ## Models
 
@@ -71,7 +71,6 @@ ie-slm-bench/
 │   ├── generate_dataset.sh
 │   ├── run_all.sh
 │   ├── push_dataset_hf.py
-│   ├── push_lm_eval_hf.py
 │   ├── analyze_results.py
 │   ├── setup_gh_auth.py
 │   └── push_results_github.py
@@ -210,7 +209,7 @@ bash scripts/install_colab.sh
 
 ### 2. Secrets
 
-Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GENERATOR_MODEL`, `IE_SLM_DATASET_REPO`, `IE_SLM_LM_EVAL_REPO`, `IE_SLM_DATA_DIR`, `IE_SLM_GEN_BATCH_SIZE`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_BATCH_SIZE_QWEN3`, `IE_SLM_BATCH_SIZE_OLAVA`, `IE_SLM_BATCH_SIZE_TINY_PAL`.
+Edit `.env` and set `HF_TOKEN`. Optional fields: `GITHUB_NAME`, `GITHUB_EMAIL`, `IE_SLM_GENERATOR_MODEL`, `IE_SLM_DATASET_REPO`, `IE_SLM_DATA_DIR`, `IE_SLM_GEN_BATCH_SIZE`, `IE_SLM_QWEN3_ID`, `IE_SLM_OLAVA_ID`, `IE_SLM_TINY_PAL_ID`, `IE_SLM_RUN_DIR`, `IE_SLM_MAX_NEW_TOKENS`, `IE_SLM_BATCH_SIZE_QWEN3`, `IE_SLM_BATCH_SIZE_OLAVA`, `IE_SLM_BATCH_SIZE_TINY_PAL`.
 
 ```bash
 cp .env.example .env
@@ -232,7 +231,8 @@ python main.py --all-models --run-dir results/run
 ### 5. Push metrics to Hugging Face and GitHub
 
 ```bash
-python scripts/push_lm_eval_hf.py --run-dir results/run
+python scripts/analyze_results.py
+python scripts/push_dataset_hf.py --card-only --run-dir results/run
 python scripts/push_results_github.py --message "Colab: IE SLM benchmark results"
 ```
 
@@ -295,7 +295,7 @@ Macro field F1 by semantic group:
 - `results/metrics.json` — same summary in JSON
 - `results/analysis.json` — per-field and per-group breakdown
 - `results/run/pred_*.csv` — per-document predictions
-- LM-eval upload: [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval)
+- Hugging Face benchmark upload: `benchmark/` and `benchmark_assets/` in [pymlex/ru-bank-ie](https://huggingface.co/datasets/pymlex/ru-bank-ie)
 
 <p align="center">
   <img src="results/assets/ru_bank_ie_metrics.png?v=3" alt="ru-bank-ie aggregate metrics" width="720" />

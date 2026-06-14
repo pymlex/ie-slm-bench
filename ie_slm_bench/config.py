@@ -26,7 +26,6 @@ SAVE_EVERY_N = int(os.environ.get("IE_SLM_SAVE_EVERY_N", "1"))
 RUN_DIR = Path(os.environ.get("IE_SLM_RUN_DIR", "results/run"))
 
 DATASET_REPO = os.environ.get("IE_SLM_DATASET_REPO", "pymlex/ru-bank-ie")
-LM_EVAL_REPO = os.environ.get("IE_SLM_LM_EVAL_REPO", "pymlex/ru-bank-ie-lm-eval")
 DATA_DIR = Path(os.environ.get("IE_SLM_DATA_DIR", "data/ru-bank-ie"))
 GENERATOR_MODEL = os.environ.get("IE_SLM_GENERATOR_MODEL", "Qwen/Qwen3.5-4B")
 GEN_BATCH_SIZE = int(os.environ.get("IE_SLM_GEN_BATCH_SIZE", "32"))
