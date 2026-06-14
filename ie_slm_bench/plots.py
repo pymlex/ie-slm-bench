@@ -125,7 +125,20 @@ def _build_label_plot_panels(
     return panels
 
 
-def _legend_below(fig, axes, ncol: int = 3, fontsize: float = 8) -> None:
+def _field_tick_label(label: str) -> str:
+    for prefix in ADDRESS_LABEL_PREFIXES:
+        if label.startswith(prefix):
+            return label[len(prefix):]
+    return label
+
+
+def _legend_below(
+    fig,
+    axes,
+    ncol: int = 3,
+    fontsize: float = 8,
+    bottom_margin: float | None = 0.1,
+) -> None:
     axis_list = list(axes) if hasattr(axes, "__iter__") and not isinstance(axes, plt.Axes) else [axes]
     handles, labels = axis_list[0].get_legend_handles_labels()
     if not handles:
@@ -134,11 +147,12 @@ def _legend_below(fig, axes, ncol: int = 3, fontsize: float = 8) -> None:
         handles,
         labels,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.02),
+        bbox_to_anchor=(0.5, 0.01),
         ncol=ncol,
         fontsize=fontsize,
     )
-    fig.subplots_adjust(bottom=0.1)
+    if bottom_margin is not None:
+        fig.subplots_adjust(bottom=bottom_margin)
 
 
 def load_summary_frames(run_dir: Path) -> pd.DataFrame:
@@ -223,9 +237,11 @@ def _plot_label_panel(
         display_name = DISPLAY_NAMES.get(model_id, model_id)
         ax.bar(offsets, values, width=width, label=display_name)
     ax.set_xticks(x)
-    ax.set_xticklabels(field_labels, rotation=35, ha="right", fontsize=7)
+    tick_labels = [_field_tick_label(label) for label in field_labels]
+    ax.set_xticklabels(tick_labels, rotation=30, ha="center", fontsize=7)
+    ax.tick_params(axis="x", pad=4)
     ax.set_ylim(0, 1)
-    ax.set_title(title)
+    ax.set_title(title, fontsize=9, loc="left", pad=10)
     ax.grid(axis="y", alpha=0.5)
 
 
@@ -238,7 +254,8 @@ def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
     panels = _build_label_plot_panels(all_labels)
     if not panels:
         return
-    fig, axes = plt.subplots(len(panels), 1, figsize=(12, 3.2 * len(panels)))
+    panel_height = 4.2
+    fig, axes = plt.subplots(len(panels), 1, figsize=(12, panel_height * len(panels)))
     axes = np.atleast_1d(axes)
     for axis, (panel_title, field_labels) in zip(axes, panels):
         _plot_label_panel(
@@ -246,11 +263,11 @@ def plot_field_f1_by_label(per_label: pd.DataFrame, out_path: Path) -> None:
             pivot,
             models,
             field_labels,
-            f"{BENCHMARK} field F1 — {panel_title}",
+            panel_title,
         )
-    fig.subplots_adjust(hspace=0.55)
-    _legend_below(fig, axes, ncol=3, fontsize=8)
-    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    fig.subplots_adjust(hspace=0.95, top=0.98, bottom=0.18)
+    _legend_below(fig, axes, ncol=3, fontsize=8, bottom_margin=None)
+    fig.savefig(out_path, dpi=180)
     plt.close(fig)
 
 
