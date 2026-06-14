@@ -298,15 +298,15 @@ Macro field F1 by semantic group:
 - LM-eval upload: [pymlex/ru-bank-ie-lm-eval](https://huggingface.co/datasets/pymlex/ru-bank-ie-lm-eval)
 
 <p align="center">
-  <img src="results/assets/ru_bank_ie_metrics.png" alt="ru-bank-ie aggregate metrics" width="720" />
+  <img src="results/assets/ru_bank_ie_metrics.png?v=3" alt="ru-bank-ie aggregate metrics" width="720" />
 </p>
 
 <p align="center">
-  <img src="results/assets/ru_bank_ie_field_group_f1.png" alt="ru-bank-ie field group F1" width="720" />
+  <img src="results/assets/ru_bank_ie_field_group_f1.png?v=3" alt="ru-bank-ie field group F1" width="720" />
 </p>
 
 <p align="center">
-  <img src="results/assets/ru_bank_ie_field_f1_by_label.png" alt="ru-bank-ie field F1 by label" width="720" />
+  <img src="results/assets/ru_bank_ie_field_f1_by_label.png?v=3" alt="ru-bank-ie field F1 by label" width="720" />
 </p>
 
 ## License
